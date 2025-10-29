@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { user, isLoggedIn, logout } = useAuth();
@@ -58,33 +59,54 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Feature Card 1 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Upload Documents</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Mckinney & Co Insurance Information</h3>
               <p className="text-white/70">
-                Upload PDF documents for analysis and processing.
+                Get the latest information about Mckinney & Co Insurance.
               </p>
             </div>
 
-            {/* Feature Card 2 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">View History</h3>
-              <p className="text-white/70">
-                View your previously uploaded and processed documents.
-              </p>
-            </div>
+            {/* Feature Card 2 - Summary Generation */}
+            <Link href="/summary">
+              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
+                <h3 className="text-xl font-semibold text-white mb-3">📝 Generate Summary</h3>
+                <p className="text-white/70">
+                  Upload insurance documents and get AI-powered summaries with key information extraction.
+                </p>
+                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
+                  <span>Click to start →</span>
+                </div>
+              </div>
+            </Link>
 
             {/* Feature Card 3 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">API Integration</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Claims Management</h3>
               <p className="text-white/70">
-                Integrate with our API for automated document processing.
+                Manage your claims and track the status of your claims.
               </p>
             </div>
 
             {/* Feature Card 4 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
+              <h3 className="text-xl font-semibold text-white mb-3">Ezlynx Automation</h3>
+              <p className="text-white/70">
+                Integrate with our API for automated document processing.
+              </p>
+            </div>
+
+            {/* Feature Card 5 */}
+            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
               <h3 className="text-xl font-semibold text-white mb-3">Settings</h3>
               <p className="text-white/70">
                 Manage your account settings and preferences.
+              </p>
+            </div>
+
+            {/* Feature Card 6 */}
+            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
+              <h3 className="text-xl font-semibold text-white mb-3">Support</h3>
+              <p className="text-white/70">
+                Get help and support for your insurance document analysis.
               </p>
             </div>
           </div>
