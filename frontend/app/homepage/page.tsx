@@ -17,7 +17,14 @@ export default function HomePage() {
         : 'http://localhost:8000';  // localhost for local dev
       
       console.log('Calling API:', `${API_URL}/`);
-      const res = await fetch(`${API_URL}/`);
+      
+      // Add headers to bypass ngrok warning page (free tier)
+      const res = await fetch(`${API_URL}/`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true',
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
