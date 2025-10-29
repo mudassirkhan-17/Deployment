@@ -16,12 +16,19 @@ export default function HomePage() {
         ? 'https://snappily-gumptionless-jose.ngrok-free.dev'  // ngrok URL for Vercel
         : 'http://localhost:8000';  // localhost for local dev
       
+      console.log('Calling API:', `${API_URL}/`);
       const res = await fetch(`${API_URL}/`);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       const data = await res.json();
       setResponse(data.message);
-    } catch (error) {
-      setResponse('Error connecting to backend');
-      console.error(error);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Error connecting to backend';
+      setResponse(`Error: ${errorMessage}. Check if backend and ngrok are running.`);
+      console.error('API Error:', error);
     } finally {
       setLoading(false);
     }
