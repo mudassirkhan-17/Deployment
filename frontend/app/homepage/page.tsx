@@ -10,8 +10,12 @@ export default function HomePage() {
     setLoading(true);
     try {
       // Call your FastAPI backend endpoint
-      // Use ngrok URL for deployed site, localhost for local dev
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      // Check if running on Vercel (production) or locally
+      const isVercel = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      const API_URL = isVercel 
+        ? 'https://snappily-gumptionless-jose.ngrok-free.dev'  // ngrok URL for Vercel
+        : 'http://localhost:8000';  // localhost for local dev
+      
       const res = await fetch(`${API_URL}/`);
       const data = await res.json();
       setResponse(data.message);
