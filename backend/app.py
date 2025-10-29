@@ -7,6 +7,7 @@ from tasks import celery_app
 import tempfile
 from auth import register, login
 from database import get_all_users, user_exists_by_email, create_user, get_user
+from upload_handler import process_carrier_uploads, get_upload_history
 from dotenv import load_dotenv
 import os
 
@@ -54,3 +55,109 @@ def login_endpoint(email: str = Form(...), password: str = Form(...)):
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.post("/upload-quotes/")
+async def upload_quotes(
+    carriers_json: str = Form(...),
+    files: list = File(...)
+):
+    """
+    Upload multiple carrier quotes
+    
+    Form data:
+    - carriers_json: JSON string with carrier names
+    - files: List of PDF files (property1, liability1, property2, liability2, ...)
+    
+    Example:
+    {
+      "carriers": [
+        {"name": "State Farm"},
+        {"name": "Allstate"}
+      ]
+    }
+    """
+    try:
+        import json
+        
+        # Parse carriers data
+        carriers_info = json.loads(carriers_json)
+        carriers = carriers_info.get("carriers", [])
+        
+        if not carriers:
+            raise HTTPException(status_code=400, detail="No carriers provided")
+        
+        if len(files) != len(carriers) * 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Expected {len(carriers) * 2} files for {len(carriers)} carriers, got {len(files)}"
+            )
+        
+        # Process files for each carrier
+        carriers_data = []
+        file_index = 0
+        
+        for i, carrier in enumerate(carriers):
+            carrier_name = carrier.get("name", f"Carrier_{i+1}")
+            
+            # Read property PDF
+            property_content = await files[file_index].read()
+            file_index += 1
+            
+            # Read liability PDF
+            liability_content = await files[file_index].read()
+            file_index += 1
+            
+            carriers_data.append({
+                "carrierName": carrier_name,
+                "propertyPDF": property_content,
+                "liabilityPDF": liability_content
+            })
+        
+        # Get user ID (for now, use a default)
+        user_id = "user_1"  # This should come from authenticated user
+        
+        # Process uploads
+        result = process_carrier_uploads(carriers_data, user_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result.get("message"))
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/upload-history/")
+def get_history(user_id: str = None):
+    """
+    Get upload history for a user or all uploads
+    """
+    try:
+        result = get_upload_history(user_id)
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result.get("error"))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/confirm-upload/")
+def confirm_upload(
+    uploadId: str = Form(...)
+):
+    """
+    Confirm upload execution
+    
+    This endpoint is called after the user reviews the uploaded files
+    and confirms they want to proceed.
+    """
+    try:
+        return {
+            "success": True,
+            "message": f"Upload confirmed",
+            "uploadId": uploadId
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
