@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.responses import FileResponse
 from google.cloud import storage
 import os
-# from tasks import celery_app, analyze_pdf_task
+from tasks import celery_app
 import tempfile
 # from auth import register, login, verify_token
 from dotenv import load_dotenv
