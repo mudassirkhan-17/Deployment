@@ -107,48 +107,57 @@ def process_carrier_uploads(
         for carrier in carriers_data:
             carrier_name = carrier['carrierName']
             
-            # Upload Property PDF
-            property_filename = get_unique_filename(carrier_name, 'property')
-            property_path = upload_pdf_to_gcs(
-                carrier['propertyPDF'],
-                property_filename
-            )
-            
-            # Upload Liability PDF
-            liability_filename = get_unique_filename(carrier_name, 'liability')
-            liability_path = upload_pdf_to_gcs(
-                carrier['liabilityPDF'],
-                liability_filename
-            )
-            
-            # Track carrier upload info
             carrier_info = {
                 "carrierName": carrier_name,
-                "propertyPDF": {
+                "propertyPDF": None,
+                "liabilityPDF": None
+            }
+            
+            # Upload Property PDF if provided
+            if carrier['propertyPDF']:
+                property_filename = get_unique_filename(carrier_name, 'property')
+                property_path = upload_pdf_to_gcs(
+                    carrier['propertyPDF'],
+                    property_filename
+                )
+                carrier_info["propertyPDF"] = {
                     "filename": property_filename,
                     "path": property_path,
                     "size": len(carrier['propertyPDF']),
                     "uploadedAt": datetime.now().isoformat()
-                },
-                "liabilityPDF": {
+                }
+            
+            # Upload Liability PDF if provided
+            if carrier['liabilityPDF']:
+                liability_filename = get_unique_filename(carrier_name, 'liability')
+                liability_path = upload_pdf_to_gcs(
+                    carrier['liabilityPDF'],
+                    liability_filename
+                )
+                carrier_info["liabilityPDF"] = {
                     "filename": liability_filename,
                     "path": liability_path,
                     "size": len(carrier['liabilityPDF']),
                     "uploadedAt": datetime.now().isoformat()
                 }
-            }
             
             uploaded_carriers.append(carrier_info)
         
         # Update metadata file
         metadata = load_metadata()
         
+        # Count total files uploaded (some may be None)
+        total_files = sum(
+            (1 if c.get("propertyPDF") else 0) + (1 if c.get("liabilityPDF") else 0)
+            for c in uploaded_carriers
+        )
+        
         upload_record = {
             "uploadId": upload_id,
             "userId": user_id,
             "uploadedAt": datetime.now().isoformat(),
             "totalCarriers": len(uploaded_carriers),
-            "totalFiles": len(uploaded_carriers) * 2,
+            "totalFiles": total_files,
             "carriers": uploaded_carriers
         }
         
@@ -160,10 +169,10 @@ def process_carrier_uploads(
             "success": True,
             "uploadId": upload_id,
             "totalCarriers": len(uploaded_carriers),
-            "totalFiles": len(uploaded_carriers) * 2,
+            "totalFiles": total_files,
             "carriers": uploaded_carriers,
             "uploadedAt": datetime.now().isoformat(),
-            "message": f"Successfully uploaded {len(uploaded_carriers)} carriers with {len(uploaded_carriers) * 2} PDF files"
+            "message": f"Successfully uploaded {len(uploaded_carriers)} carriers with {total_files} PDF files"
         }
     
     except Exception as e:

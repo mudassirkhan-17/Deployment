@@ -20,6 +20,7 @@ interface UploadResponse {
   carriers?: any[];
   message?: string;
   error?: string;
+  detail?: string;
 }
 
 export default function SummaryPage() {
@@ -94,13 +95,23 @@ export default function SummaryPage() {
   };
 
   const handleExecute = async () => {
-    // Validate all carriers have names and files
+    // Validate all carriers have names
     const isValid = carriers.every(
-      c => c.name.trim() && c.propertyPDF.file && c.liabilityPDF.file
+      c => c.name.trim()
     );
 
     if (!isValid) {
-      alert('Please fill in all carrier names and upload both PDFs for each carrier');
+      alert('Please fill in all carrier names');
+      return;
+    }
+
+    // Check if at least one carrier has at least one file
+    const hasAnyFiles = carriers.some(
+      c => c.propertyPDF.file || c.liabilityPDF.file
+    );
+
+    if (!hasAnyFiles) {
+      alert('Please upload at least one PDF across all carriers');
       return;
     }
 
@@ -114,17 +125,29 @@ export default function SummaryPage() {
 
       // Add carriers JSON
       const carriersJson = JSON.stringify({
-        carriers: carriers.map(c => ({ name: c.name }))
+        carriers: carriers.map((c, idx) => ({
+          name: c.name,
+          hasProperty: !!c.propertyPDF.file,
+          hasLiability: !!c.liabilityPDF.file
+        }))
       });
       formData.append('carriers_json', carriersJson);
 
-      // Add all files in order: property1, liability1, property2, liability2, ...
-      carriers.forEach(carrier => {
+      // Add all files with metadata about which carrier they belong to
+      carriers.forEach((carrier, carrierIdx) => {
         if (carrier.propertyPDF.file) {
           formData.append('files', carrier.propertyPDF.file);
+          formData.append('file_metadata', JSON.stringify({
+            carrierIndex: carrierIdx,
+            type: 'property'
+          }));
         }
         if (carrier.liabilityPDF.file) {
           formData.append('files', carrier.liabilityPDF.file);
+          formData.append('file_metadata', JSON.stringify({
+            carrierIndex: carrierIdx,
+            type: 'liability'
+          }));
         }
       });
 
@@ -137,10 +160,20 @@ export default function SummaryPage() {
         },
       });
 
-      const data: UploadResponse = await response.json();
+      let data: UploadResponse;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        const text = await response.text();
+        console.error('Failed to parse JSON. Response text:', text);
+        console.error('Response status:', response.status);
+        throw new Error(`Invalid response from server (${response.status}): ${text}`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Upload failed');
+        console.error('Backend error - Status:', response.status);
+        console.error('Backend error - Response:', data);
+        throw new Error(data.message || data.error || data.detail || `Upload failed (${response.status})`);
       }
 
       setUploadResult(data);
@@ -400,7 +433,7 @@ export default function SummaryPage() {
                   <div className="text-center">
                     <p className="text-white/60 text-sm mb-1">Complete Carriers</p>
                     <p className="text-3xl font-bold text-green-300">
-                      {carriers.filter(c => c.name.trim() && c.propertyPDF.file && c.liabilityPDF.file).length}
+                      {carriers.filter(c => c.name.trim() && (c.propertyPDF.file || c.liabilityPDF.file)).length}
                     </p>
                   </div>
                   <div className="text-center">
@@ -422,16 +455,28 @@ export default function SummaryPage() {
                 <div key={idx} className="bg-white/5 rounded-lg p-6 border border-white/20">
                   <h4 className="text-lg font-semibold text-white mb-4">{carrier.carrierName}</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white/5 p-4 rounded">
-                      <p className="text-white/80 text-sm font-medium mb-2">Property PDF</p>
-                      <p className="text-white/60 text-xs break-all">{carrier.propertyPDF.path}</p>
-                      <p className="text-white/50 text-xs mt-2">{(carrier.propertyPDF.size / 1024).toFixed(2)} KB</p>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded">
-                      <p className="text-white/80 text-sm font-medium mb-2">Liability PDF</p>
-                      <p className="text-white/60 text-xs break-all">{carrier.liabilityPDF.path}</p>
-                      <p className="text-white/50 text-xs mt-2">{(carrier.liabilityPDF.size / 1024).toFixed(2)} KB</p>
-                    </div>
+                    {carrier.propertyPDF ? (
+                      <div className="bg-white/5 p-4 rounded">
+                        <p className="text-white/80 text-sm font-medium mb-2">Property PDF</p>
+                        <p className="text-white/60 text-xs break-all">{carrier.propertyPDF.path}</p>
+                        <p className="text-white/50 text-xs mt-2">{(carrier.propertyPDF.size / 1024).toFixed(2)} KB</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 p-4 rounded border border-white/20">
+                        <p className="text-white/60 text-sm">Property PDF - Not uploaded</p>
+                      </div>
+                    )}
+                    {carrier.liabilityPDF ? (
+                      <div className="bg-white/5 p-4 rounded">
+                        <p className="text-white/80 text-sm font-medium mb-2">Liability PDF</p>
+                        <p className="text-white/60 text-xs break-all">{carrier.liabilityPDF.path}</p>
+                        <p className="text-white/50 text-xs mt-2">{(carrier.liabilityPDF.size / 1024).toFixed(2)} KB</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 p-4 rounded border border-white/20">
+                        <p className="text-white/60 text-sm">Liability PDF - Not uploaded</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

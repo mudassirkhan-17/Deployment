@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Form, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import storage
@@ -58,6 +58,7 @@ def health_check():
 
 @app.post("/upload-quotes/")
 async def upload_quotes(
+    request: Request,
     carriers_json: str = Form(...),
     files: list = File(...)
 ):
@@ -86,32 +87,51 @@ async def upload_quotes(
         if not carriers:
             raise HTTPException(status_code=400, detail="No carriers provided")
         
-        if len(files) != len(carriers) * 2:
+        # Files can be 0 to 2 per carrier (completely optional)
+        min_files = 0
+        max_files = len(carriers) * 2
+        
+        if len(files) < min_files or len(files) > max_files:
             raise HTTPException(
                 status_code=400,
-                detail=f"Expected {len(carriers) * 2} files for {len(carriers)} carriers, got {len(files)}"
+                detail=f"Expected 0-{max_files} files for {len(carriers)} carriers, got {len(files)}"
             )
         
         # Process files for each carrier
         carriers_data = []
-        file_index = 0
         
-        for i, carrier in enumerate(carriers):
-            carrier_name = carrier.get("name", f"Carrier_{i+1}")
-            
-            # Read property PDF
-            property_content = await files[file_index].read()
-            file_index += 1
-            
-            # Read liability PDF
-            liability_content = await files[file_index].read()
-            file_index += 1
-            
+        # Initialize all carriers with None
+        for carrier in carriers:
             carriers_data.append({
-                "carrierName": carrier_name,
-                "propertyPDF": property_content,
-                "liabilityPDF": liability_content
+                "carrierName": carrier.get("name", f"Carrier_{len(carriers_data)+1}"),
+                "propertyPDF": None,
+                "liabilityPDF": None
             })
+        
+        # Get file metadata list
+        form_data = await request.form()
+        file_metadata_list = form_data.getlist('file_metadata')
+        
+        # Process each file with its metadata
+        for idx, file in enumerate(files):
+            if idx < len(file_metadata_list):
+                try:
+                    metadata = json.loads(file_metadata_list[idx])
+                    carrier_index = metadata.get('carrierIndex')
+                    file_type = metadata.get('type')
+                    
+                    # Read file
+                    file_content = await file.read()
+                    
+                    # Assign to correct carrier and type
+                    if 0 <= carrier_index < len(carriers_data):
+                        if file_type == 'property':
+                            carriers_data[carrier_index]['propertyPDF'] = file_content
+                        elif file_type == 'liability':
+                            carriers_data[carrier_index]['liabilityPDF'] = file_content
+                except Exception as e:
+                    print(f"Error processing file metadata: {e}")
+                    raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
         
         # Get user ID (for now, use a default)
         user_id = "user_1"  # This should come from authenticated user
@@ -127,7 +147,11 @@ async def upload_quotes(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"ERROR in upload_quotes: {str(e)}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 @app.get("/upload-history/")
 def get_history(user_id: str = None):
