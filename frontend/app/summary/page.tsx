@@ -196,8 +196,8 @@ export default function SummaryPage() {
         throw new Error('Missing uploadId. Please execute upload first.');
       }
 
-      // Call backend to read metadata from GCS and process files
-      const response = await fetch(`${apiUrl}/phase1/process?uploadId=${encodeURIComponent(uploadResult.uploadId)}`, {
+      // Call backend to analyze PDF quality from GCS
+      const response = await fetch(`${apiUrl}/phase1/quality-analysis?uploadId=${encodeURIComponent(uploadResult.uploadId)}`, {
         method: 'GET',
         headers: {
           'ngrok-skip-browser-warning': 'true',
@@ -206,10 +206,10 @@ export default function SummaryPage() {
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.message || data.error || data.detail || `Processing failed (${response.status})`);
+        throw new Error(data.message || data.error || data.detail || `Quality analysis failed (${response.status})`);
       }
 
-      console.log('Phase1 processing result:', data);
+      console.log('PDF Quality Analysis result:', data);
 
       // Navigate to next page
       router.push('/summary/confirmed');

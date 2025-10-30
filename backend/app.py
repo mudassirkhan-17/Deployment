@@ -10,7 +10,7 @@ from database import get_all_users, user_exists_by_email, create_user, get_user
 from upload_handler import process_carrier_uploads, get_upload_history
 from dotenv import load_dotenv
 import os
-from phase1 import process_upload_lengths
+from phase1 import process_upload_lengths, process_upload_quality_analysis
 
 load_dotenv()
 
@@ -198,6 +198,25 @@ def process_phase1(uploadId: str):
         raise
     except Exception as e:
         print(f"ERROR in process_phase1: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+@app.get("/phase1/quality-analysis")
+def analyze_quality(uploadId: str):
+    """
+    Analyze PDF quality using PyMuPDF - extracts text and classifies pages
+    as CLEAN, PROBLEM, or BORDERLINE based on quality metrics.
+    """
+    try:
+        result = process_upload_quality_analysis(uploadId)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in analyze_quality: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
