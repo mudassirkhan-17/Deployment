@@ -192,26 +192,25 @@ export default function SummaryPage() {
     setUploadError('');
 
     try {
-      // Send confirmation to backend
-      const response = await fetch(`${apiUrl}/confirm-upload/`, {
-        method: 'POST',
+      if (!uploadResult?.uploadId) {
+        throw new Error('Missing uploadId. Please execute upload first.');
+      }
+
+      // Call backend to read metadata from GCS and process files
+      const response = await fetch(`${apiUrl}/phase1/process?uploadId=${encodeURIComponent(uploadResult.uploadId)}`, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
         },
-        body: JSON.stringify({
-          uploadId: uploadResult?.uploadId,
-        }),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Confirmation failed');
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || data.detail || `Processing failed (${response.status})`);
       }
 
-      console.log('Confirmation successful:', data);
-      
+      console.log('Phase1 processing result:', data);
+
       // Navigate to next page
       router.push('/summary/confirmed');
     } catch (error: any) {

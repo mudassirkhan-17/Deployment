@@ -10,6 +10,7 @@ from database import get_all_users, user_exists_by_email, create_user, get_user
 from upload_handler import process_carrier_uploads, get_upload_history
 from dotenv import load_dotenv
 import os
+from phase1 import process_upload_lengths
 
 load_dotenv()
 
@@ -185,3 +186,18 @@ def confirm_upload(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/phase1/process")
+def process_phase1(uploadId: str):
+    try:
+        result = process_upload_lengths(uploadId)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in process_phase1: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
