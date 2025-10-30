@@ -23,7 +23,7 @@ task_time_limit = 30 * 60  # 30 minutes hard limit
 task_soft_time_limit = 25 * 60  # 25 minutes soft limit
 
 # Worker settings
-worker_prefetch_multiplier = 4
+worker_prefetch_multiplier = 5
 worker_max_tasks_per_child = 1000
 
 # Result backend settings

@@ -315,4 +315,16 @@ def process_upload_ocr_analysis(upload_id: str) -> Dict[str, Any]:
         'carriers': results,
     }
     
+    # Automatically trigger Phase 2C Smart Selection after OCR completes
+    try:
+        print("\n✅ Phase 2 OCR complete. Starting Phase 2C Smart Selection...")
+        from phase2c_smart_selection import process_upload_smart_selection_analysis
+        selection_result = process_upload_smart_selection_analysis(upload_id)
+        if selection_result.get('success'):
+            print("✅ Phase 2C Smart Selection complete!")
+        else:
+            print(f"Warning: Phase 2C had issues: {selection_result.get('error')}")
+    except Exception as e:
+        print(f"Warning: Phase 2C Smart Selection failed: {e}")
+    
     return result
