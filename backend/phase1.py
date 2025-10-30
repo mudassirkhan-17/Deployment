@@ -350,6 +350,18 @@ def process_upload_quality_analysis(upload_id: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"Warning: Failed to save results to GCS: {e}")
     
+    # Automatically trigger Phase 2 OCR after Phase 1 completes
+    try:
+        print("\n✅ Phase 1 complete. Starting Phase 2 OCR...")
+        from phase2_ocr import process_upload_ocr_analysis
+        ocr_result = process_upload_ocr_analysis(upload_id)
+        if ocr_result.get('success'):
+            print("✅ Phase 2 OCR complete!")
+        else:
+            print(f"Warning: Phase 2 OCR had issues: {ocr_result.get('error')}")
+    except Exception as e:
+        print(f"Warning: Phase 2 OCR failed: {e}")
+    
     return result
 
 

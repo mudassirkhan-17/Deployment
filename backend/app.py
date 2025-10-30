@@ -11,6 +11,7 @@ from upload_handler import process_carrier_uploads, get_upload_history
 from dotenv import load_dotenv
 import os
 from phase1 import process_upload_lengths, process_upload_quality_analysis
+from phase2_ocr import process_upload_ocr_analysis
 
 load_dotenv()
 
@@ -207,6 +208,7 @@ def analyze_quality(uploadId: str):
     """
     Analyze PDF quality using PyMuPDF - extracts text and classifies pages
     as CLEAN, PROBLEM, or BORDERLINE based on quality metrics.
+    Automatically triggers Phase 2 OCR after completion.
     """
     try:
         result = process_upload_quality_analysis(uploadId)
@@ -217,6 +219,25 @@ def analyze_quality(uploadId: str):
         raise
     except Exception as e:
         print(f"ERROR in analyze_quality: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+@app.get("/phase2/ocr-analysis")
+def analyze_ocr(uploadId: str):
+    """
+    Run OCR on all PDF pages using Tesseract.
+    Can be called manually or automatically triggered after Phase 1.
+    """
+    try:
+        result = process_upload_ocr_analysis(uploadId)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in analyze_ocr: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
