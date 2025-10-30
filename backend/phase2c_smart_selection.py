@@ -368,4 +368,16 @@ def process_upload_smart_selection_analysis(upload_id: str) -> Dict[str, Any]:
         'carriers': results,
     }
     
+    # Automatically trigger Phase 2D Intelligent Combination after smart selection completes
+    try:
+        print("\n✅ Phase 2C Smart Selection complete. Starting Phase 2D Intelligent Combination...")
+        from phase2d_intelligent_combination import process_upload_intelligent_combination
+        combination_result = process_upload_intelligent_combination(upload_id)
+        if combination_result.get('success'):
+            print("✅ Phase 2D Intelligent Combination complete!")
+        else:
+            print(f"Warning: Phase 2D had issues: {combination_result.get('error')}")
+    except Exception as e:
+        print(f"Warning: Phase 2D Intelligent Combination failed: {e}")
+    
     return result

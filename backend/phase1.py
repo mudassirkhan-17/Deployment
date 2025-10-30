@@ -65,7 +65,8 @@ def _extract_and_analyze_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
             page_result = {
                 'page_num': page_num,
                 'quality': quality,
-                'metrics': metrics
+                'metrics': metrics,
+                'text': text  # Include text for Phase 2C smart selection
             }
             
             results['all_metrics'][page_num] = metrics
@@ -141,9 +142,9 @@ def process_upload_lengths(upload_id: str) -> Dict[str, Any]:
 
 
 def _save_quality_results_to_gcs(bucket: storage.bucket.Bucket, upload_id: str, results: Dict[str, Any], analysis_data: Dict[str, Any]) -> None:
-    """Save quality analysis results to GCS phase1/results folder - one file per carrier"""
+    """Save quality analysis results to GCS phase1/results folder - one file per carrier per file type"""
     
-    # Save one file per carrier
+    # Save one file per carrier per file type
     for carrier in analysis_data.get('carriers', []):
         carrier_name = carrier.get('carrierName', 'Unknown')
         # Sanitize carrier name same way as PDF uploads
@@ -155,10 +156,12 @@ def _save_quality_results_to_gcs(bucket: storage.bucket.Bucket, upload_id: str, 
         except Exception as e:
             print(f"Warning: Failed to save report.txt for {carrier_name}: {e}")
         
-        try:
-            _save_clean_pages_txt(bucket, carrier_name, safe_carrier_name, timestamp, carrier)
-        except Exception as e:
-            print(f"Warning: Failed to save clean_pages.txt for {carrier_name}: {e}")
+        # Save clean pages one file per file type
+        for file_data in carrier.get('files', []):
+            try:
+                _save_clean_pages_txt(bucket, carrier_name, safe_carrier_name, timestamp, file_data)
+            except Exception as e:
+                print(f"Warning: Failed to save clean_pages.txt for {carrier_name} {file_data.get('type')}: {e}")
 
 
 def _save_report_txt(bucket: storage.bucket.Bucket, carrier_name: str, safe_carrier_name: str, timestamp: str, carrier_data: Dict[str, Any]) -> None:
@@ -217,48 +220,58 @@ def _save_report_txt(bucket: storage.bucket.Bucket, carrier_name: str, safe_carr
     print(f"✅ Saved report to: gs://{BUCKET_NAME}/{report_path}")
 
 
-def _save_clean_pages_txt(bucket: storage.bucket.Bucket, carrier_name: str, safe_carrier_name: str, timestamp: str, carrier_data: Dict[str, Any]) -> None:
-    """Save pymupdf_clean_pages_only.txt to GCS - one file per carrier"""
-    clean_pages_path = f'phase1/results/{safe_carrier_name}_pymupdf_clean_pages_only_{timestamp}.txt'
+def _save_clean_pages_txt(bucket: storage.bucket.Bucket, carrier_name: str, safe_carrier_name: str, timestamp: str, file_data: Dict[str, Any]) -> None:
+    """Save pymupdf_clean_pages_only.txt to GCS - one file per file type"""
+    file_type = file_data.get('type', 'unknown')
+    type_short = file_type.replace('PDF', '').lower()
+    clean_pages_path = f'phase1/results/{safe_carrier_name}_{type_short}_pymupdf_clean_pages_only_{timestamp}.txt'
     
     report_lines = []
     report_lines.append("PYMUPDF CLEAN PAGES ONLY - FOR SMART SELECTION")
     report_lines.append("=" * 80)
     report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report_lines.append(f"Carrier: {carrier_name}")
+    report_lines.append(f"File Type: {file_type.upper()}")
     report_lines.append("=" * 80)
     report_lines.append("")
     
     # Summary of clean pages
-    for file_data in carrier_data.get('files', []):
-        file_type = file_data.get('type', 'unknown')
-        total_pages = file_data.get('total_pages', 0)
-        clean_count = file_data.get('clean_pages', 0)
-        clean_pages_nums = file_data.get('clean_page_numbers', [])
-        
-        report_lines.append(f"{file_type.upper()}:")
-        report_lines.append(f"Total Pages: {total_pages}")
-        report_lines.append(f"Clean Pages: {clean_count}")
-        report_lines.append(f"Clean Page Numbers: {clean_pages_nums}")
-        report_lines.append("")
-        
-        # List clean pages with basic metrics
-        page_details = file_data.get('page_details', {})
-        for page_num in clean_pages_nums:
-            if page_num in page_details:
-                metrics = page_details[page_num]
-                report_lines.append(f"PAGE {page_num}:")
-                report_lines.append("-" * 40)
-                report_lines.append(f"Quality: CLEAN")
-                report_lines.append(f"Confidence: {metrics['confidence_score']:.1f}%")
-                report_lines.append(f"Readable Words: {metrics['readable_words']}")
-                report_lines.append(f"Total Characters: {metrics['total_chars']}")
-                report_lines.append(f"(cid:XX) Codes: {metrics['cid_codes']}")
-                report_lines.append(f"Gibberish Ratio: {metrics['gibberish_ratio']:.2%}")
-                report_lines.append("")
-                report_lines.append("Note: Full text content not included in summary")
-                report_lines.append("=" * 80)
-                report_lines.append("")
+    total_pages = file_data.get('total_pages', 0)
+    clean_count = file_data.get('clean_pages', 0)
+    clean_pages_nums = file_data.get('clean_page_numbers', [])
+    
+    report_lines.append(f"Total Pages: {total_pages}")
+    report_lines.append(f"Clean Pages: {clean_count}")
+    report_lines.append(f"Clean Page Numbers: {clean_pages_nums}")
+    report_lines.append("")
+    
+    # List clean pages with full text content
+    clean_pages_data = file_data.get('clean_pages_data', [])
+    page_details = file_data.get('page_details', {})
+    for page_num in clean_pages_nums:
+        if page_num in page_details:
+            metrics = page_details[page_num]
+            
+            # Find text from clean_pages_data
+            page_text = ""
+            for page_result in clean_pages_data:
+                if page_result.get('page_num') == page_num:
+                    page_text = page_result.get('text', '')
+                    break
+            
+            report_lines.append(f"PAGE {page_num}:")
+            report_lines.append("-" * 40)
+            report_lines.append(f"Quality: CLEAN")
+            report_lines.append(f"Confidence: {metrics['confidence_score']:.1f}%")
+            report_lines.append(f"Readable Words: {metrics['readable_words']}")
+            report_lines.append(f"Total Characters: {metrics['total_chars']}")
+            report_lines.append(f"(cid:XX) Codes: {metrics['cid_codes']}")
+            report_lines.append(f"Gibberish Ratio: {metrics['gibberish_ratio']:.2%}")
+            report_lines.append("")
+            report_lines.append("TEXT CONTENT:")
+            report_lines.append(page_text)
+            report_lines.append("=" * 80)
+            report_lines.append("")
     
     report_content = "\n".join(report_lines)
     
@@ -322,7 +335,8 @@ def process_upload_quality_analysis(upload_id: str) -> Dict[str, Any]:
                     'page_details': analysis.get('all_metrics', {}),
                     'clean_page_numbers': [p['page_num'] for p in analysis.get('clean_pages', [])],
                     'problem_page_numbers': [p['page_num'] for p in analysis.get('problem_pages', [])],
-                    'borderline_page_numbers': [p['page_num'] for p in analysis.get('borderline_pages', [])]
+                    'borderline_page_numbers': [p['page_num'] for p in analysis.get('borderline_pages', [])],
+                    'clean_pages_data': analysis.get('clean_pages', [])  # Include full data with text for Phase 2C
                 })
                 
             except Exception as e:

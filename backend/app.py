@@ -241,3 +241,24 @@ def analyze_ocr(uploadId: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+@app.get("/phase2d/intelligent-combination")
+def intelligent_combination(uploadId: str):
+    """
+    Create intelligent combined file from Phase 2C smart selection results.
+    Automatically triggered after Phase 2C completes.
+    """
+    try:
+        from phase2d_intelligent_combination import process_upload_intelligent_combination
+        result = process_upload_intelligent_combination(uploadId)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in intelligent_combination: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
