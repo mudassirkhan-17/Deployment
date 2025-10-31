@@ -373,6 +373,75 @@ def save_extraction_results_to_gcs(
     return final_file_path
 
 
+def _check_if_all_carriers_complete(bucket: storage.bucket.Bucket, upload_id: str) -> bool:
+    """
+    Check if all carriers in this upload have completed Phase 3.
+    Returns True if this is the last carrier to finish.
+    """
+    try:
+        # Read metadata to get total carriers
+        from phase1 import _read_metadata
+        full_metadata = _read_metadata(bucket)
+        uploads = full_metadata.get('uploads', [])
+        upload_record = next((u for u in uploads if u.get('uploadId') == upload_id), None)
+        
+        if not upload_record:
+            print(f"⚠️  Upload {upload_id} not found in metadata")
+            return False
+        
+        carriers = upload_record.get('carriers', [])
+        total_carriers = len(carriers)
+        
+        if total_carriers == 0:
+            print(f"⚠️  No carriers found for upload {upload_id}")
+            return False
+        
+        # Count how many carriers have completed Phase 3
+        completed_count = 0
+        for carrier in carriers:
+            carrier_name = carrier.get('carrierName', 'Unknown')
+            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+            
+            # Check for property and liability final validated fields
+            for file_type in ['propertyPDF', 'liabilityPDF']:
+                pdf_info = carrier.get(file_type)
+                if not pdf_info or not pdf_info.get('path'):
+                    continue
+                
+                # Extract timestamp from PDF path
+                pdf_path = pdf_info['path']
+                timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                if not timestamp_match:
+                    continue
+                
+                timestamp = timestamp_match.group(1)
+                type_short = file_type.replace('PDF', '').lower()
+                
+                # Check if Phase 3 result exists
+                final_file_path = f"phase3/results/{safe_name}_{type_short}_final_validated_fields_{timestamp}.json"
+                blob = bucket.blob(final_file_path)
+                if blob.exists():
+                    completed_count += 1
+        
+        # Calculate total expected files (property + liability for each carrier)
+        expected_files = 0
+        for carrier in carriers:
+            if carrier.get('propertyPDF') and carrier.get('propertyPDF').get('path'):
+                expected_files += 1
+            if carrier.get('liabilityPDF') and carrier.get('liabilityPDF').get('path'):
+                expected_files += 1
+        
+        print(f"📊 Upload {upload_id}: {completed_count}/{expected_files} files completed")
+        
+        return completed_count == expected_files and expected_files > 0
+        
+    except Exception as e:
+        print(f"❌ Error checking completion status: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
     """
     Given an upload_id, read Phase 2D results from GCS,
@@ -466,8 +535,34 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     'error': str(e)
                 })
     
-    return {
+    result = {
         "success": True,
         "uploadId": upload_id,
         "results": all_results
     }
+    
+    # Check if all carriers in this upload have completed Phase 3
+    print("\n✅ Phase 3 LLM extraction complete!")
+    print("🔍 Checking if all carriers are complete...")
+    
+    if _check_if_all_carriers_complete(bucket, upload_id):
+        print("🎉 ALL CARRIERS COMPLETE! Auto-triggering Google Sheets finalization...")
+        try:
+            from phase5_googlesheet import finalize_upload_to_sheets
+            sheets_result = finalize_upload_to_sheets(upload_id)
+            if sheets_result.get('success'):
+                print("✅ Google Sheets finalization complete!")
+                result['sheets_push'] = sheets_result
+            else:
+                print(f"⚠️  Google Sheets finalization had issues: {sheets_result.get('error')}")
+                result['sheets_push_error'] = sheets_result.get('error')
+        except Exception as e:
+            print(f"❌ Google Sheets finalization failed: {e}")
+            import traceback
+            traceback.print_exc()
+            result['sheets_push_error'] = str(e)
+    else:
+        print("⏳ Other carriers still processing. Waiting for all to complete...")
+        print("💡 Or manually run: /finalize-upload/{uploadId}")
+    
+    return result

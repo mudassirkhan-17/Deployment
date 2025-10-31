@@ -283,3 +283,46 @@ def llm_extraction(uploadId: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+@app.get("/phase5/googlesheets-push")
+def googlesheets_push(uploadId: str, sheetName: str = "Insurance Fields Data"):
+    """
+    DEPRECATED: Use /finalize-upload instead.
+    This endpoint pushes individual carriers (causes overwriting).
+    """
+    try:
+        from phase5_googlesheet import process_upload_googlesheets_push
+        result = process_upload_googlesheets_push(uploadId, sheetName)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in googlesheets_push: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+@app.get("/finalize-upload")
+def finalize_upload(uploadId: str, sheetName: str = "Insurance Fields Data"):
+    """
+    Finalize upload: Push ALL carriers to Google Sheets in side-by-side format.
+    Should be called AFTER all carriers complete Phase 3.
+    This prevents individual carriers from overwriting each other.
+    """
+    try:
+        from phase5_googlesheet import finalize_upload_to_sheets
+        result = finalize_upload_to_sheets(uploadId, sheetName)
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in finalize_upload: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
