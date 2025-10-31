@@ -207,7 +207,7 @@ def process_upload_intelligent_combination(upload_id: str) -> Dict[str, Any]:
         carrier_name = carrier.get('carrierName')
         safe_carrier_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
         
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info:
                 continue

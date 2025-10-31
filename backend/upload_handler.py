@@ -93,6 +93,8 @@ def process_carrier_uploads(
             - propertyFilename: str
             - liabilityPDF: bytes (file content)
             - liabilityFilename: str
+            - liquorPDF: bytes (file content)
+            - liquorFilename: str
         user_id: User ID for tracking
     
     Returns:
@@ -110,11 +112,12 @@ def process_carrier_uploads(
             carrier_info = {
                 "carrierName": carrier_name,
                 "propertyPDF": None,
-                "liabilityPDF": None
+                "liabilityPDF": None,
+                "liquorPDF": None
             }
             
             # Upload Property PDF if provided
-            if carrier['propertyPDF']:
+            if carrier.get('propertyPDF'):
                 property_filename = get_unique_filename(carrier_name, 'property')
                 property_path = upload_pdf_to_gcs(
                     carrier['propertyPDF'],
@@ -128,7 +131,7 @@ def process_carrier_uploads(
                 }
             
             # Upload Liability PDF if provided
-            if carrier['liabilityPDF']:
+            if carrier.get('liabilityPDF'):
                 liability_filename = get_unique_filename(carrier_name, 'liability')
                 liability_path = upload_pdf_to_gcs(
                     carrier['liabilityPDF'],
@@ -138,6 +141,20 @@ def process_carrier_uploads(
                     "filename": liability_filename,
                     "path": liability_path,
                     "size": len(carrier['liabilityPDF']),
+                    "uploadedAt": datetime.now().isoformat()
+                }
+            
+            # Upload Liquor PDF if provided
+            if carrier.get('liquorPDF'):
+                liquor_filename = get_unique_filename(carrier_name, 'liquor')
+                liquor_path = upload_pdf_to_gcs(
+                    carrier['liquorPDF'],
+                    liquor_filename
+                )
+                carrier_info["liquorPDF"] = {
+                    "filename": liquor_filename,
+                    "path": liquor_path,
+                    "size": len(carrier['liquorPDF']),
                     "uploadedAt": datetime.now().isoformat()
                 }
             

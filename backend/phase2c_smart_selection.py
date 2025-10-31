@@ -302,7 +302,7 @@ def process_upload_smart_selection_analysis(upload_id: str) -> Dict[str, Any]:
         carrier_name = carrier.get('carrierName')
         files_analysis: List[Dict[str, Any]] = []
         
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info:
                 continue

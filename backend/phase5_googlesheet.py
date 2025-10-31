@@ -174,7 +174,7 @@ def process_upload_googlesheets_push(upload_id: str, sheet_name: str = "Insuranc
         carrier_name = carrier.get('carrierName')
         safe_carrier_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
         
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info:
                 continue
@@ -248,6 +248,195 @@ def _get_all_unique_fields(all_carrier_data: Dict[str, Dict[str, Any]], carrier_
     return all_fields
 
 
+def _apply_sheet_formatting(sheet, all_rows: List[List[str]], has_property: bool, has_liability: bool, has_liquor: bool) -> None:
+    """Apply formatting to section headers in Google Sheets"""
+    try:
+        # Get spreadsheet object for batch formatting
+        spreadsheet = sheet.spreadsheet
+        
+        # Calculate which rows are section headers by scanning all_rows
+        current_row_idx = 0
+        requests = []
+        
+        # Row 0: Company header - Green background, white text, bold, centered
+        if len(all_rows) > 0:
+            requests.append({
+                'repeatCell': {
+                    'range': {
+                        'sheetId': 0,
+                        'startRowIndex': 0,
+                        'endRowIndex': 1,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 10
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'backgroundColor': {'red': 0.2, 'green': 0.6, 'blue': 0.2},
+                            'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True},
+                            'horizontalAlignment': 'CENTER',
+                            'wrapStrategy': 'WRAP'
+                        }
+                    },
+                    'fields': 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)'
+                }
+            })
+            current_row_idx = 3  # Skip company header, empty row, and section title row
+        
+        # Property section header (row 2 = index 2)
+        if has_property and len(all_rows) > 2:
+            requests.append({
+                'repeatCell': {
+                    'range': {
+                        'sheetId': 0,
+                        'startRowIndex': 2,
+                        'endRowIndex': 3,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 10
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'backgroundColor': {'red': 0.0, 'green': 0.0, 'blue': 0.0},
+                            'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True},
+                            'horizontalAlignment': 'CENTER'
+                        }
+                    },
+                    'fields': 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+                }
+            })
+            
+            # Find Property column headers row
+            for i in range(3, min(20, len(all_rows))):
+                row = all_rows[i]
+                if row and len(row) > 0 and row[0] == "Field Name":
+                    requests.append({
+                        'repeatCell': {
+                            'range': {
+                                'sheetId': 0,
+                                'startRowIndex': i,
+                                'endRowIndex': i + 1,
+                                'startColumnIndex': 0,
+                                'endColumnIndex': 10
+                            },
+                            'cell': {
+                                'userEnteredFormat': {
+                                    'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9},
+                                    'textFormat': {'bold': True}
+                                }
+                            },
+                            'fields': 'userEnteredFormat(backgroundColor,textFormat)'
+                        }
+                    })
+                    break
+        
+        # Liability section header - scan for it
+        if has_liability:
+            for i in range(5, min(100, len(all_rows))):
+                row = all_rows[i]
+                if row and len(row) > 0 and any(x and 'General Liability' in str(x) for x in row):
+                    requests.append({
+                        'repeatCell': {
+                            'range': {
+                                'sheetId': 0,
+                                'startRowIndex': i,
+                                'endRowIndex': i + 1,
+                                'startColumnIndex': 0,
+                                'endColumnIndex': 10
+                            },
+                            'cell': {
+                                'userEnteredFormat': {
+                                    'backgroundColor': {'red': 0.0, 'green': 0.0, 'blue': 0.0},
+                                    'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True},
+                                    'horizontalAlignment': 'CENTER'
+                                }
+                            },
+                            'fields': 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+                        }
+                    })
+                    # Find Liability column headers
+                    for j in range(i + 1, min(i + 10, len(all_rows))):
+                        row2 = all_rows[j]
+                        if row2 and len(row2) > 0 and row2[0] == "Field Name":
+                            requests.append({
+                                'repeatCell': {
+                                    'range': {
+                                        'sheetId': 0,
+                                        'startRowIndex': j,
+                                        'endRowIndex': j + 1,
+                                        'startColumnIndex': 0,
+                                        'endColumnIndex': 10
+                                    },
+                                    'cell': {
+                                        'userEnteredFormat': {
+                                            'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9},
+                                            'textFormat': {'bold': True}
+                                        }
+                                    },
+                                    'fields': 'userEnteredFormat(backgroundColor,textFormat)'
+                                }
+                            })
+                            break
+                    break
+        
+        # Liquor section header - scan for it
+        if has_liquor:
+            for i in range(5, min(100, len(all_rows))):
+                row = all_rows[i]
+                if row and len(row) > 0 and any(x and 'Liquor' in str(x) for x in row):
+                    requests.append({
+                        'repeatCell': {
+                            'range': {
+                                'sheetId': 0,
+                                'startRowIndex': i,
+                                'endRowIndex': i + 1,
+                                'startColumnIndex': 0,
+                                'endColumnIndex': 10
+                            },
+                            'cell': {
+                                'userEnteredFormat': {
+                                    'backgroundColor': {'red': 0.0, 'green': 0.0, 'blue': 0.0},
+                                    'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True},
+                                    'horizontalAlignment': 'CENTER'
+                                }
+                            },
+                            'fields': 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+                        }
+                    })
+                    # Find Liquor column headers
+                    for j in range(i + 1, min(i + 10, len(all_rows))):
+                        row2 = all_rows[j]
+                        if row2 and len(row2) > 0 and row2[0] == "Field Name":
+                            requests.append({
+                                'repeatCell': {
+                                    'range': {
+                                        'sheetId': 0,
+                                        'startRowIndex': j,
+                                        'endRowIndex': j + 1,
+                                        'startColumnIndex': 0,
+                                        'endColumnIndex': 10
+                                    },
+                                    'cell': {
+                                        'userEnteredFormat': {
+                                            'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9},
+                                            'textFormat': {'bold': True}
+                                        }
+                                    },
+                                    'fields': 'userEnteredFormat(backgroundColor,textFormat)'
+                                }
+                            })
+                            break
+                    break
+        
+        # Apply all formats in batch
+        if requests:
+            spreadsheet.batch_update({'requests': requests})
+            
+    except Exception as e:
+        print(f"⚠️  Warning: Could not apply formatting: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't fail the whole process if formatting fails
+
+
 def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Fields Data") -> Dict[str, Any]:
     """
     Finalize upload: Load ALL carriers from this upload, build side-by-side layout, push ONCE.
@@ -257,6 +446,7 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
     - Company Header: "Mckinney & Co. Insurance"
     - Property Section: All carriers side-by-side
     - Liability Section: All carriers side-by-side (if any)
+    - Liquor Section: All carriers side-by-side (if any)
     
     Each section has:
     - Section header (e.g., "Property Coverages")
@@ -288,7 +478,7 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
     carrier_names = [c.get('carrierName', 'Unknown') for c in carriers]
     print(f"📦 Found {len(carriers)} carriers: {', '.join(carrier_names)}")
     
-    # 2. Load ALL carrier data (property + liability)
+    # 2. Load ALL carrier data (property + liability + liquor)
     all_carrier_data = {}
     
     for carrier in carriers:
@@ -297,11 +487,12 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
         
         all_carrier_data[carrier_name] = {
             'property': None,
-            'liability': None
+            'liability': None,
+            'liquor': None
         }
         
-        # Check for property and liability files
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        # Check for property, liability, and liquor files
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info or not pdf_info.get('path'):
                 continue
@@ -447,11 +638,55 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
                     else:
                         row.extend(['', ''])
                 all_rows.append(row)
+            
+            all_rows.append([])  # Spacing
+            all_rows.append([])
+        
+        # LIQUOR SECTION
+        has_liquor = any(all_carrier_data[c].get('liquor') for c in carrier_names if c in all_carrier_data)
+        
+        if has_liquor:
+            print(f"  📋 Building Liquor section...")
+            all_rows.append(["Liquor/Bar Insurance Coverages"])
+            all_rows.append(["=" * 20])
+            all_rows.append([])
+            
+            # Liquor column headers
+            liquor_header = ["Field Name"]
+            for carrier_name in carrier_names:
+                liquor_header.extend([f"LLM Value ({carrier_name})", f"Source Page ({carrier_name})"])
+            all_rows.append(liquor_header)
+            
+            # Liquor data rows
+            liquor_fields = _get_all_unique_fields(all_carrier_data, carrier_names, 'liquor')
+            print(f"    Found {len(liquor_fields)} unique liquor fields")
+            
+            for field_name in liquor_fields:
+                row = [field_name]
+                for carrier_name in carrier_names:
+                    liquor_data = all_carrier_data.get(carrier_name, {}).get('liquor', {})
+                    if liquor_data and field_name in liquor_data:
+                        field_data = liquor_data[field_name]
+                        row.extend([
+                            field_data.get('llm_value', ''),
+                            field_data.get('source_page', '')
+                        ])
+                    else:
+                        row.extend(['', ''])
+                all_rows.append(row)
+            
+            all_rows.append([])  # Spacing
+            all_rows.append([])
         
         # 7. Push EVERYTHING in ONE batch
         print(f"\n📤 Pushing {len(all_rows)} rows to Google Sheets...")
         update_response = sheet.update('A1', all_rows)
         print(f"✅ Google Sheets update response: {update_response}")
+        
+        # 8. Apply formatting (headers, colors, etc.)
+        print(f"\n🎨 Applying formatting to headers...")
+        _apply_sheet_formatting(sheet, all_rows, has_property, has_liability, has_liquor)
+        print(f"✅ Formatting applied!")
         
         print(f"\n{'='*80}")
         print(f"✅ FINALIZATION COMPLETE!")
@@ -470,7 +705,8 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
             "sheetName": sheet_name,
             "sections": {
                 "property": has_property,
-                "liability": has_liability
+                "liability": has_liability,
+                "liquor": has_liquor
             }
         }
         

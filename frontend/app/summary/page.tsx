@@ -10,6 +10,7 @@ interface CarrierData {
   name: string;
   propertyPDF: { file: File | null; name: string };
   liabilityPDF: { file: File | null; name: string };
+  liquorPDF: { file: File | null; name: string };
 }
 
 interface UploadResponse {
@@ -27,7 +28,7 @@ export default function SummaryPage() {
   const { user, isLoggedIn } = useAuth();
   const router = useRouter();
   const [carriers, setCarriers] = useState<CarrierData[]>([
-    { id: 1, name: '', propertyPDF: { file: null, name: '' }, liabilityPDF: { file: null, name: '' } }
+    { id: 1, name: '', propertyPDF: { file: null, name: '' }, liabilityPDF: { file: null, name: '' }, liquorPDF: { file: null, name: '' } }
   ]);
   const [nextId, setNextId] = useState(2);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -61,7 +62,8 @@ export default function SummaryPage() {
       id: nextId,
       name: '',
       propertyPDF: { file: null, name: '' },
-      liabilityPDF: { file: null, name: '' }
+      liabilityPDF: { file: null, name: '' },
+      liquorPDF: { file: null, name: '' }
     };
     setCarriers([...carriers, newCarrier]);
     setNextId(nextId + 1);
@@ -79,14 +81,16 @@ export default function SummaryPage() {
     setCarriers(carriers.map(c => (c.id === id ? { ...c, name: value } : c)));
   };
 
-  const handleFileUpload = (id: number, type: 'property' | 'liability', file: File) => {
+  const handleFileUpload = (id: number, type: 'property' | 'liability' | 'liquor', file: File) => {
     setCarriers(
       carriers.map(c => {
         if (c.id === id) {
           if (type === 'property') {
             return { ...c, propertyPDF: { file, name: file.name } };
-          } else {
+          } else if (type === 'liability') {
             return { ...c, liabilityPDF: { file, name: file.name } };
+          } else {
+            return { ...c, liquorPDF: { file, name: file.name } };
           }
         }
         return c;
@@ -107,7 +111,7 @@ export default function SummaryPage() {
 
     // Check if at least one carrier has at least one file
     const hasAnyFiles = carriers.some(
-      c => c.propertyPDF.file || c.liabilityPDF.file
+      c => c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file
     );
 
     if (!hasAnyFiles) {
@@ -128,7 +132,8 @@ export default function SummaryPage() {
         carriers: carriers.map((c, idx) => ({
           name: c.name,
           hasProperty: !!c.propertyPDF.file,
-          hasLiability: !!c.liabilityPDF.file
+          hasLiability: !!c.liabilityPDF.file,
+          hasLiquor: !!c.liquorPDF.file
         }))
       });
       formData.append('carriers_json', carriersJson);
@@ -147,6 +152,13 @@ export default function SummaryPage() {
           formData.append('file_metadata', JSON.stringify({
             carrierIndex: carrierIdx,
             type: 'liability'
+          }));
+        }
+        if (carrier.liquorPDF.file) {
+          formData.append('files', carrier.liquorPDF.file);
+          formData.append('file_metadata', JSON.stringify({
+            carrierIndex: carrierIdx,
+            type: 'liquor'
           }));
         }
       });
@@ -313,7 +325,7 @@ export default function SummaryPage() {
                     </div>
 
                     {/* PDF Upload Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Property PDF */}
                       <div>
                         <label className="block text-white font-medium mb-3">Property PDF</label>
@@ -377,6 +389,38 @@ export default function SummaryPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Liquor PDF */}
+                      <div>
+                        <label className="block text-white font-medium mb-3">Liquor PDF</label>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                handleFileUpload(carrier.id, 'liquor', e.target.files[0]);
+                              }
+                            }}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                          <div className="border-2 border-dashed border-white/30 rounded-xl p-8 hover:border-white/50 transition cursor-pointer bg-white/5 hover:bg-white/10">
+                            <div className="text-center">
+                              {carrier.liquorPDF.file ? (
+                                <>
+                                  <p className="text-green-300 font-medium">✓ {carrier.liquorPDF.name}</p>
+                                  <p className="text-white/60 text-sm mt-1">{(carrier.liquorPDF.file.size / 1024).toFixed(2)} KB</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-white/80 font-medium">📄 Click to upload PDF</p>
+                                  <p className="text-white/60 text-sm mt-1">Liquor/Bar Insurance Quote</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Upload Status */}
@@ -389,6 +433,9 @@ export default function SummaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={carrier.liabilityPDF.file ? '✓ text-green-300' : '○ text-white/60'}>Liability PDF</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={carrier.liquorPDF.file ? '✓ text-green-300' : '○ text-white/60'}>Liquor PDF</span>
                       </div>
                     </div>
                   </div>
@@ -432,13 +479,13 @@ export default function SummaryPage() {
                   <div className="text-center">
                     <p className="text-white/60 text-sm mb-1">Complete Carriers</p>
                     <p className="text-3xl font-bold text-green-300">
-                      {carriers.filter(c => c.name.trim() && (c.propertyPDF.file || c.liabilityPDF.file)).length}
+                      {carriers.filter(c => c.name.trim() && (c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file)).length}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-white/60 text-sm mb-1">Total Files Uploaded</p>
                     <p className="text-3xl font-bold text-white">
-                      {carriers.reduce((acc, c) => acc + (c.propertyPDF.file ? 1 : 0) + (c.liabilityPDF.file ? 1 : 0), 0)}
+                      {carriers.reduce((acc, c) => acc + (c.propertyPDF.file ? 1 : 0) + (c.liabilityPDF.file ? 1 : 0) + (c.liquorPDF.file ? 1 : 0), 0)}
                     </p>
                   </div>
                 </div>
@@ -453,7 +500,7 @@ export default function SummaryPage() {
               {uploadResult.carriers.map((carrier, idx) => (
                 <div key={idx} className="bg-white/5 rounded-lg p-6 border border-white/20">
                   <h4 className="text-lg font-semibold text-white mb-4">{carrier.carrierName}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {carrier.propertyPDF ? (
                       <div className="bg-white/5 p-4 rounded">
                         <p className="text-white/80 text-sm font-medium mb-2">Property PDF</p>
@@ -474,6 +521,17 @@ export default function SummaryPage() {
                     ) : (
                       <div className="bg-white/10 p-4 rounded border border-white/20">
                         <p className="text-white/60 text-sm">Liability PDF - Not uploaded</p>
+                      </div>
+                    )}
+                    {carrier.liquorPDF ? (
+                      <div className="bg-white/5 p-4 rounded">
+                        <p className="text-white/80 text-sm font-medium mb-2">Liquor PDF</p>
+                        <p className="text-white/60 text-xs break-all">{carrier.liquorPDF.path}</p>
+                        <p className="text-white/50 text-xs mt-2">{(carrier.liquorPDF.size / 1024).toFixed(2)} KB</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 p-4 rounded border border-white/20">
+                        <p className="text-white/60 text-sm">Liquor PDF - Not uploaded</p>
                       </div>
                     )}
                   </div>

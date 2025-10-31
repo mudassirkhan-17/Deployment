@@ -108,7 +108,7 @@ def process_upload_lengths(upload_id: str) -> Dict[str, Any]:
     for carrier in record.get('carriers', []):
         carrier_name = carrier.get('carrierName')
         files_info: List[Dict[str, Any]] = []
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info:
                 continue
@@ -300,7 +300,7 @@ def process_upload_quality_analysis(upload_id: str) -> Dict[str, Any]:
         carrier_name = carrier.get('carrierName')
         files_analysis: List[Dict[str, Any]] = []
         
-        for file_type in ['propertyPDF', 'liabilityPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
             pdf_info = carrier.get(file_type)
             if not pdf_info:
                 continue
