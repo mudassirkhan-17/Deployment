@@ -278,8 +278,22 @@ def process_upload_intelligent_combination(upload_id: str) -> Dict[str, Any]:
                     'error': str(e)
                 })
     
-    return {
+    result = {
         "success": True,
         "uploadId": upload_id,
         "results": all_results
     }
+    
+    # Automatically trigger Phase 3 LLM extraction after intelligent combination completes
+    try:
+        print("\n✅ Phase 2D Intelligent Combination complete. Starting Phase 3 LLM extraction...")
+        from phase3_llm import process_upload_llm_extraction
+        llm_result = process_upload_llm_extraction(upload_id)
+        if llm_result.get('success'):
+            print("✅ Phase 3 LLM extraction complete!")
+        else:
+            print(f"Warning: Phase 3 had issues: {llm_result.get('error')}")
+    except Exception as e:
+        print(f"Warning: Phase 3 LLM extraction failed: {e}")
+    
+    return result

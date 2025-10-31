@@ -262,3 +262,24 @@ def intelligent_combination(uploadId: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+@app.get("/phase3/llm-extraction")
+def llm_extraction(uploadId: str):
+    """
+    Extract insurance fields using GPT from Phase 2D intelligent combined file.
+    Automatically triggered after Phase 2D completes.
+    """
+    try:
+        from phase3_llm import process_upload_llm_extraction
+        result = process_upload_llm_extraction(uploadId)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in llm_extraction: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
