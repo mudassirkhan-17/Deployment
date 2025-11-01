@@ -96,7 +96,7 @@ export default function DashboardPage() {
 
             {/* Feature Card 5 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Quality COntrol/ Follow Ups</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Quality Control / Follow Ups</h3>
               <p className="text-white/70">
                 Manage your account settings and preferences.
               </p>
