@@ -80,7 +80,7 @@ export default function DashboardPage() {
 
             {/* Feature Card 3 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Claims Management</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Data Enrichment</h3>
               <p className="text-white/70">
                 Manage your claims and track the status of your claims.
               </p>
@@ -96,7 +96,7 @@ export default function DashboardPage() {
 
             {/* Feature Card 5 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Settings</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Quality COntrol/ Follow Ups</h3>
               <p className="text-white/70">
                 Manage your account settings and preferences.
               </p>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
             {/* Feature Card 6 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Support</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Cover Sheet</h3>
               <p className="text-white/70">
                 Get help and support for your insurance document analysis.
               </p>
