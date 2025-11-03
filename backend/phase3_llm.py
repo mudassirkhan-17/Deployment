@@ -203,7 +203,7 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
         # Use OpenAI API (correct format)
         client = openai.OpenAI(api_key=openai.api_key)
         response = client.responses.create(
-            model="gpt-5",
+            model="gpt-5-nano",
             input=prompt,
             reasoning={
                 "effort": "low"

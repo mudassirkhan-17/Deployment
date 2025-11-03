@@ -1,7 +1,9 @@
 """
-Phase 2C: Smart LLM Selection
-Uses GPT to intelligently select the best text source (PyMuPDF vs OCR) for each page.
+Phase 2C: Smart Selection (Rule-Based)
+Uses simple rule-based selection: Always prefers OCR (NanoNets) over PyMuPDF.
+Fallback to PyMuPDF only if OCR is unavailable.
 Works with Google Cloud Storage.
+No LLM calls - faster and cheaper.
 """
 import openai
 import json
@@ -199,12 +201,17 @@ def select_best_source_with_llm(page_num: int, pymupdf_text: str, ocr_text: str)
 
 
 def process_all_pages_selection(pymupdf_pages: Dict[int, Dict], ocr_pages: Dict[int, Dict]) -> Dict[int, Dict]:
-    """Process all pages for smart selection"""
-    print("PHASE 2C: SMART LLM SELECTION")
+    """
+    Process smart selection for all pages using simple rule-based selection.
+    Always prefers OCR (NanoNets) over PyMuPDF, with PyMuPDF as fallback if OCR unavailable.
+    No LLM calls - faster and cheaper.
+    """
+    print("PHASE 2C: SMART SELECTION (Rule-Based)")
     print("=" * 80)
     
     all_pages = get_all_page_numbers(pymupdf_pages, ocr_pages)
     print(f"Processing {len(all_pages)} pages for smart selection")
+    print("Selection Rule: Always prefer OCR (NanoNets), fallback to PyMuPDF if OCR unavailable")
     print("=" * 80)
     
     selection_results = {}
@@ -216,32 +223,29 @@ def process_all_pages_selection(pymupdf_pages: Dict[int, Dict], ocr_pages: Dict[
         pymupdf_text = pymupdf_pages.get(page_num, {}).get('text', '')
         ocr_text = ocr_pages.get(page_num, {}).get('text', '')
         
-        # Use LLM to select best source
-        selection = select_best_source_with_llm(page_num, pymupdf_text, ocr_text)
-        
-        if selection:
-            selection_results[page_num] = selection
-            print(f"  [SUCCESS] Selected {selection['selected_source']} - {selection['reason']}")
+        # Simple rule: Always prefer OCR if available (NanoNets is better quality)
+        # Fallback to PyMuPDF only if OCR is not available
+        if ocr_text and len(ocr_text.strip()) > 0:
+            # OCR available - use it (NanoNets provides better quality)
+            selection_results[page_num] = {
+                "page": page_num,
+                "selected_source": "OCR",
+                "reason": "OCR (NanoNets) selected - provides better quality with structured data extraction",
+                "confidence": "high"
+            }
+            print(f"  [SUCCESS] Selected OCR - NanoNets provides better quality")
+        elif pymupdf_text and len(pymupdf_text.strip()) > 0:
+            # OCR not available, use PyMuPDF as fallback
+            selection_results[page_num] = {
+                "page": page_num,
+                "selected_source": "PyMuPDF",
+                "reason": "Fallback: OCR not available, using PyMuPDF",
+                "confidence": "medium"
+            }
+            print(f"  [FALLBACK] Selected PyMuPDF (OCR not available)")
         else:
-            # Fallback: choose PyMuPDF if available, otherwise OCR
-            if pymupdf_text:
-                selection_results[page_num] = {
-                    "page": page_num,
-                    "selected_source": "PyMuPDF",
-                    "reason": "Fallback: PyMuPDF available",
-                    "confidence": "low"
-                }
-                print(f"  [FALLBACK] Selected PyMuPDF (fallback)")
-            elif ocr_text:
-                selection_results[page_num] = {
-                    "page": page_num,
-                    "selected_source": "OCR",
-                    "reason": "Fallback: Only OCR available",
-                    "confidence": "low"
-                }
-                print(f"  [FALLBACK] Selected OCR (fallback)")
-            else:
-                print(f"  [ERROR] No text available for Page {page_num}")
+            # Neither source available
+            print(f"  [ERROR] No text available for Page {page_num} from either source")
     
     return selection_results
 
@@ -282,8 +286,9 @@ def process_upload_smart_selection(upload_id: str, pymupdf_file: str, ocr_file: 
 def process_upload_smart_selection_analysis(upload_id: str) -> Dict[str, Any]:
     """
     Given an upload_id, read Phase 1 and Phase 2 results from GCS,
-    perform smart selection using LLM, and save results.
+    perform smart selection using rule-based selection (always prefer OCR), and save results.
     Automatically called after Phase 2 OCR.
+    No LLM calls - faster and cheaper.
     """
     bucket = _get_bucket()
     
