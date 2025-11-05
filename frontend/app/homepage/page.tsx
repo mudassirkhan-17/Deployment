@@ -13,7 +13,7 @@ export default function HomePage() {
       // Check if running on Vercel (production) or locally
       const isVercel = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
       const API_URL = isVercel 
-        ? 'http://13.211.209.140:8000'  // EC2 backend URL
+        ? 'https://insurance-backend.duckdns.org'  // HTTPS backend with SSL
         : 'http://localhost:8000';  // localhost for local dev
       
       console.log('Calling API:', `${API_URL}/`);
