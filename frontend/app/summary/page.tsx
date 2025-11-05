@@ -52,7 +52,7 @@ export default function SummaryPage() {
   useEffect(() => {
     const isVercel = window.location.hostname !== 'localhost';
     const url = isVercel
-      ? 'https://snappily-gumptionless-jose.ngrok-free.dev'
+      ? 'http://13.211.209.140:8000'
       : 'http://localhost:8000';
     setApiUrl(url);
   }, []);
