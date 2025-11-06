@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { FormData } from '@/types/form'
+import { FormData } from '@/types/eforms/form'
 
 export const generatePDF = (formData: FormData) => {
   console.log('Generating PDF with data:', formData) // Debug log
