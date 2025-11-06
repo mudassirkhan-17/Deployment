@@ -6,6 +6,11 @@ from google.cloud import storage
 import io
 from phase1_pymudf import analyze_text_quality, classify_page_quality
 
+# NOTE: PyMuPDF detailed text extraction and quality analysis is now disabled.
+# Phase 1 now only counts total pages and returns minimal structure.
+# Phase 2C Smart Selection always prefers OCR (NanoNets) anyway,
+# so detailed PyMuPDF processing was unnecessary and wasting time.
+
 BUCKET_NAME = 'deployment'
 PDF_FOLDER = 'pdf'
 METADATA_FILE = f'{PDF_FOLDER}/uploads_metadata.json'
@@ -42,44 +47,28 @@ def _download_bytes(bucket: storage.bucket.Bucket, blob_path: str) -> bytes:
 
 
 def _extract_and_analyze_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
-    """Extract text from PDF bytes and analyze quality"""
+    """
+    DEPRECATED: PyMuPDF text extraction disabled - using OCR only.
+    Keeping function signature for structure compatibility.
+    
+    This function now only counts total pages and returns minimal structure.
+    Phase 2C Smart Selection always prefers OCR anyway, so empty PyMuPDF
+    analysis is unnecessary and wastes processing time.
+    """
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         total_pages = doc.page_count
+        doc.close()
         
-        results = {
+        # Return minimal structure without processing individual pages
+        # Phase 2C will always select OCR anyway, so empty PyMuPDF data is fine
+        return {
             'clean_pages': [],
             'problem_pages': [],
             'borderline_pages': [],
             'all_metrics': {},
             'total_pages': total_pages
         }
-        
-        for page_num in range(1, total_pages + 1):
-            page = doc[page_num - 1]
-            text = page.get_text()
-            
-            metrics = analyze_text_quality(text)
-            quality = classify_page_quality(text)  # classifies based on text directly
-            
-            page_result = {
-                'page_num': page_num,
-                'quality': quality,
-                'metrics': metrics,
-                'text': text  # Include text for Phase 2C smart selection
-            }
-            
-            results['all_metrics'][page_num] = metrics
-            
-            if quality == "CLEAN":
-                results['clean_pages'].append(page_result)
-            elif quality == "PROBLEM":
-                results['problem_pages'].append(page_result)
-            else:
-                results['borderline_pages'].append(page_result)
-        
-        doc.close()
-        return results
         
     except Exception as e:
         return {

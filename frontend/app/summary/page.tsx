@@ -52,7 +52,7 @@ export default function SummaryPage() {
   useEffect(() => {
     const isVercel = window.location.hostname !== 'localhost';
     const url = isVercel
-      ? 'https://snappily-gumptionless-jose.ngrok-free.dev'
+      ? 'https://insurance-backend.duckdns.org'
       : 'http://localhost:8000';
     setApiUrl(url);
   }, []);

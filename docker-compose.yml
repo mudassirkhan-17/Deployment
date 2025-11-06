@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: insurance-redis
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - insurance-network
+
+  # FastAPI Backend
+  backend:
+    build: .
+    container_name: insurance-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/insurance-sheets-474717-7fc3fd9736bc.json
+      - BUCKET_NAME=deployment
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PYTHONPATH=/app
+    volumes:
+      # For development: sync code changes without rebuild
+      - ./backend/app.py:/app/app.py
+      - ./backend/tasks.py:/app/tasks.py
+      - ./backend/auth.py:/app/auth.py
+      - ./backend/database.py:/app/database.py
+      - ./backend/upload_handler.py:/app/upload_handler.py
+      - ./backend/celery_config.py:/app/celery_config.py
+      - ./backend/phase1.py:/app/phase1.py
+      - ./backend/phase1_pymudf.py:/app/phase1_pymudf.py
+      - ./backend/phase2_ocr_nano.py:/app/phase2_ocr_nano.py
+      - ./backend/phase2c_smart_selection.py:/app/phase2c_smart_selection.py
+      - ./backend/phase2d_intelligent_combination.py:/app/phase2d_intelligent_combination.py
+      - ./backend/phase3_llm.py:/app/phase3_llm.py
+      - ./backend/phase5_googlesheet.py:/app/phase5_googlesheet.py
+      - ./backend/multi_carrier_property.py:/app/multi_carrier_property.py
+      - ./credentials:/app/credentials
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - insurance-network
+
+  # Celery Worker
+  celery_worker:
+    build: .
+    container_name: insurance-celery
+    command: celery -A tasks worker --loglevel=info --concurrency=2
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/insurance-sheets-474717-7fc3fd9736bc.json
+      - BUCKET_NAME=deployment
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PYTHONPATH=/app
+    volumes:
+      # For development: sync code changes without rebuild
+      - ./backend/app.py:/app/app.py
+      - ./backend/tasks.py:/app/tasks.py
+      - ./backend/auth.py:/app/auth.py
+      - ./backend/database.py:/app/database.py
+      - ./backend/upload_handler.py:/app/upload_handler.py
+      - ./backend/celery_config.py:/app/celery_config.py
+      - ./backend/phase1.py:/app/phase1.py
+      - ./backend/phase1_pymudf.py:/app/phase1_pymudf.py
+      - ./backend/phase2_ocr_nano.py:/app/phase2_ocr_nano.py
+      - ./backend/phase2c_smart_selection.py:/app/phase2c_smart_selection.py
+      - ./backend/phase2d_intelligent_combination.py:/app/phase2d_intelligent_combination.py
+      - ./backend/phase3_llm.py:/app/phase3_llm.py
+      - ./backend/phase5_googlesheet.py:/app/phase5_googlesheet.py
+      - ./backend/multi_carrier_property.py:/app/multi_carrier_property.py
+      - ./credentials:/app/credentials
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - insurance-network
+
+volumes:
+  redis_data:
+
+networks:
+  insurance-network:
+    driver: bridge

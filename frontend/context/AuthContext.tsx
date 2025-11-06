@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       const isVercel = window.location.hostname !== 'localhost';
       return isVercel
-        ? 'https://snappily-gumptionless-jose.ngrok-free.dev'
+        ? 'https://insurance-backend.duckdns.org'
         : 'http://localhost:8000';
     }
     return 'http://localhost:8000';

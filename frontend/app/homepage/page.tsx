@@ -13,7 +13,7 @@ export default function HomePage() {
       // Check if running on Vercel (production) or locally
       const isVercel = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
       const API_URL = isVercel 
-        ? 'https://snappily-gumptionless-jose.ngrok-free.dev'  // ngrok URL for Vercel
+        ? 'https://insurance-backend.duckdns.org'  // HTTPS backend with SSL
         : 'http://localhost:8000';  // localhost for local dev
       
       console.log('Calling API:', `${API_URL}/`);
