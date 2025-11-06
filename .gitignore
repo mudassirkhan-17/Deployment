@@ -3,3 +3,9 @@ backend/.env
 *.env
 .env
 dump.rdb
+
+# Temporary Eforms folder
+Eform/
+
+# Environment variables
+.env.local
