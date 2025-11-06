@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
-import { FormSection } from '@/components/FormSection'
-import { FormData } from '@/types/form'
-import { generatePDF } from '@/lib/pdf'
-import { AreaMeasurementModal } from '@/components/AreaMeasurementModal'
+import { FormSection } from '@/components/eforms/FormSection'
+import { FormData } from '@/types/eforms/form'
+import { generatePDF } from '@/lib/eforms/pdf'
+import { AreaMeasurementModal } from '@/components/eforms/AreaMeasurementModal'
 
 // Extend Window interface for Google Maps
 declare global {
@@ -770,15 +770,9 @@ export default function HomePage() {
 
       {/* Resume Panel - Left Side Overlay */}
       {showResumePanel && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50"
-            onClick={() => setShowResumePanel(false)}
-          ></div>
-          
+        <div className="fixed inset-y-0 left-0 z-50 w-96">
           {/* Panel */}
-          <div className="relative w-96 bg-white shadow-2xl overflow-y-auto">
+          <div className="relative w-full h-full bg-white shadow-2xl overflow-y-auto">
             {/* Panel Header */}
             <div className="sticky top-0 bg-black text-white py-4 px-6 flex justify-between items-center z-10">
               <h2 className="text-lg font-semibold">Resume Forms</h2>

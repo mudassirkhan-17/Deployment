@@ -30,8 +30,8 @@ export default function AuthPage() {
       localStorage.setItem('agentProfile', agentName)
       localStorage.setItem('agentLoginTime', new Date().toISOString())
       
-      // Redirect to main app
-      router.push('/')
+      // Redirect to cstore app
+      router.push('/cstore')
     }
   }
 

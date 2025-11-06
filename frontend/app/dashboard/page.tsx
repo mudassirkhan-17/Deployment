@@ -78,7 +78,20 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Feature Card 3 */}
+            {/* Feature Card 3 - Convenience Store Application */}
+            <Link href="/cstore">
+              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
+                <h3 className="text-xl font-semibold text-white mb-3">🏪 Convenience Store E-FORM</h3>
+                <p className="text-white/70">
+                  Complete insurance application form with automated data prefill from property databases.
+                </p>
+                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
+                  <span>Click to start →</span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Feature Card 4 */}
             <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
               <h3 className="text-xl font-semibold text-white mb-3">Data Enrichment</h3>
               <p className="text-white/70">

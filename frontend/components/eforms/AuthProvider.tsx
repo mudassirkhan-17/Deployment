@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function EformsAuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
@@ -13,12 +13,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check if user is authenticated
     const agentProfile = localStorage.getItem('agentProfile')
     
-    if (!agentProfile && pathname !== '/auth') {
+    if (!agentProfile && pathname !== '/cstore/auth') {
       // Not authenticated and not on auth page - redirect to auth
-      router.push('/auth')
-    } else if (agentProfile && pathname === '/auth') {
-      // Already authenticated and on auth page - redirect to home
-      router.push('/')
+      router.push('/cstore/auth')
+    } else if (agentProfile && pathname === '/cstore/auth') {
+      // Already authenticated and on auth page - redirect to cstore home
+      router.push('/cstore')
     } else {
       setIsAuthenticated(!!agentProfile)
     }
