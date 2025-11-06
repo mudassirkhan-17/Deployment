@@ -733,7 +733,7 @@ export default function HomePage() {
   const handleLogout = () => {
     localStorage.removeItem('agentProfile')
     localStorage.removeItem('agentLoginTime')
-    router.push('/auth')
+    router.push('/cstore/auth')
   }
 
   return (
