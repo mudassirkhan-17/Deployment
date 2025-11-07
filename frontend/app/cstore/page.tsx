@@ -8,12 +8,7 @@ import { FormData } from '@/types/eforms/form'
 import { generatePDF } from '@/lib/eforms/pdf'
 import { AreaMeasurementModal } from '@/components/eforms/AreaMeasurementModal'
 
-// Extend Window interface for Google Maps
-declare global {
-  interface Window {
-    google: any
-  }
-}
+// Google Maps types are defined in frontend/types/google-maps.d.ts
 
 export default function HomePage() {
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -112,7 +107,10 @@ export default function HomePage() {
   useEffect(() => {
     if (showAreaMeasurementTool && window.google?.maps?.drawing) {
       setTimeout(() => {
-        const map = new window.google.maps.Map(document.getElementById('measurement-map'), {
+        const mapElement = document.getElementById('measurement-map')
+        if (!mapElement) return
+        
+        const map = new window.google.maps.Map(mapElement, {
           zoom: 19,
           center: { 
             lat: smartyData?.data?.latitude || 33.580, 
@@ -128,7 +126,7 @@ export default function HomePage() {
           drawingControl: true,
           drawingControlOptions: {
             position: window.google.maps.ControlPosition.TOP_CENTER,
-            drawingModes: ['polygon'],
+            drawingModes: [window.google.maps.drawing.OverlayType.POLYGON],
           },
           polygonOptions: {
             editable: true,
