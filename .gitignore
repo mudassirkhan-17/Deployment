@@ -9,5 +9,9 @@ dump.rdb
 /eforms/
 /eforms-source/
 
+# Temporary Client Form folder (source repo for syncing) - root level only
+/eclient_form/
+/client_form/
+
 # Environment variables
 .env.local
