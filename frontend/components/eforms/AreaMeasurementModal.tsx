@@ -159,7 +159,7 @@ export function AreaMeasurementModal({
           drawingControl: true,
           drawingControlOptions: {
             position: window.google.maps.ControlPosition.TOP_CENTER,
-            drawingModes: ['polygon'],
+            drawingModes: [window.google.maps.drawing.OverlayType.POLYGON],
           },
           polygonOptions: {
             editable: true,
