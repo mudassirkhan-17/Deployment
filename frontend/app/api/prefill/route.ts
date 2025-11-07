@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Client } from 'pg';
 
 // Enhanced Prefill Service for Insurance Form using Smarty Street API + Google Maps
 class InsuranceFormPrefillService {
@@ -6,12 +7,46 @@ class InsuranceFormPrefillService {
   private smartyAuthToken: string;
   private smartyBaseUrl: string;
   private googleMapsApiKey: string;
+  private neonConnectionString: string;
+  private addressStopWords = new Set<string>([
+    'USA', 'UNITED', 'STATES', 'APT', 'APARTMENT', 'SUITE', 'STE', 'BLDG',
+    'FLOOR', 'FL', 'UNIT', 'GA', 'GEORGIA', 'SC', 'SOUTH', 'CAROLINA'
+  ]);
+  private streetSuffixMap = new Map<string, string>([
+    ['ROAD', 'RD'],
+    ['RD', 'RD'],
+    ['STREET', 'ST'],
+    ['ST', 'ST'],
+    ['AVENUE', 'AVE'],
+    ['AVE', 'AVE'],
+    ['DRIVE', 'DR'],
+    ['DR', 'DR'],
+    ['BOULEVARD', 'BLVD'],
+    ['BLVD', 'BLVD'],
+    ['HIGHWAY', 'HWY'],
+    ['HWY', 'HWY'],
+    ['COURT', 'CT'],
+    ['CT', 'CT'],
+    ['LANE', 'LN'],
+    ['LN', 'LN'],
+    ['PARKWAY', 'PKWY'],
+    ['PKWY', 'PKWY'],
+    ['TRACE', 'TRCE'],
+    ['TRCE', 'TRCE'],
+    ['TERRACE', 'TER'],
+    ['TER', 'TER']
+  ]);
+  private businessSuffixes = [
+    'LLC', 'L L C', 'INC', 'INC.', 'CORP', 'CORPORATION', 'COMPANY', 'CO', 'CO.', 'LTD',
+    'LP', 'LLP', 'LIMITED', 'PLC', 'PC', 'GROUP', 'HOLDINGS'
+  ];
 
   constructor() {
     this.smartyAuthId = process.env.SMARTY_AUTH_ID || '';
     this.smartyAuthToken = process.env.SMARTY_AUTH_TOKEN || '';
     this.smartyBaseUrl = "https://us-enrichment.api.smarty.com";
     this.googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY || '';
+    this.neonConnectionString = process.env.NEON_CONNECTION_STRING || '';
   }
 
   async prefillFormData(address: string): Promise<any> {
@@ -45,13 +80,40 @@ class InsuranceFormPrefillService {
       const validation = this._validateProperty(propertyData, googleData);
       
       const mappedData = this._mapToInsuranceForm(propertyData, googleData, address);
-      
+
+      const neonData = await this._getNeonBusinessData(address, mappedData);
+
+      if (neonData?.business) {
+        // Enrich mapped data with key Neon insights for easy drag & drop
+        if (neonData.business.registered_agent_name) {
+          mappedData.registeredAgentName = neonData.business.registered_agent_name;
+        }
+        if (neonData.business.registered_agent_physical_address) {
+          mappedData.registeredAgentAddress = neonData.business.registered_agent_physical_address;
+        }
+        if (neonData.business.naics_code) {
+          mappedData.naicsCode = neonData.business.naics_code;
+        }
+        if (neonData.business.naics_sub_code) {
+          mappedData.naicsSubCode = neonData.business.naics_sub_code;
+        }
+        if (neonData.business.yearsAtLocation !== null && neonData.business.yearsAtLocation !== undefined) {
+          mappedData.yearsAtLocation = neonData.business.yearsAtLocation;
+        }
+      }
+
+      if (neonData?.license?.list_format_name) {
+        mappedData.neonBusinessName = neonData.license.list_format_name;
+      }
+
       console.log(`✅ Successfully mapped ${Object.keys(mappedData).length} form fields`);
       
       return {
         success: true,
         data: mappedData,
         validation: validation,
+        neon: neonData,
+        ownership: neonData?.ownership || { status: 'unknown', matchedName: null, neonBusinessName: null },
         message: `Auto-filled ${Object.keys(mappedData).length} fields from property data`,
         fieldsCount: Object.keys(mappedData).length
       };
@@ -773,6 +835,232 @@ class InsuranceFormPrefillService {
 
     console.log('🎯 Mapped comprehensive data with', Object.keys(mappedData).length, 'attributes');
     return mappedData;
+  }
+
+  private _normalizeAddressTokens(address: string): string[] {
+    const cleaned = address
+      .toUpperCase()
+      .replace(/[.,#]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return [];
+
+    return cleaned
+      .split(' ')
+      .filter(Boolean)
+      .map(token => this.streetSuffixMap.get(token) || token)
+      .filter(token => !this.addressStopWords.has(token));
+  }
+
+  private _buildAddressPatterns(address: string): string[] {
+    const tokens = this._normalizeAddressTokens(address);
+    if (tokens.length === 0) return [];
+
+    const streetNumber = tokens[0];
+    const significantTokens = tokens.length > 1 ? tokens.slice(1) : [];
+
+    const fullPattern = `%${tokens.join('%')}%`;
+    const streetTokens = significantTokens.slice(0, 2);
+    const streetPattern = streetTokens.length ? `%${[streetNumber, ...streetTokens].join('%')}%` : null;
+
+    return [fullPattern, streetPattern].filter((pattern): pattern is string => Boolean(pattern));
+  }
+
+  private async _queryTobaccoLicenses(client: Client, patterns: string[]) {
+    const sql = `
+      SELECT
+        id,
+        list_format_name,
+        list_format_address,
+        license_id,
+        tbl_license_type,
+        created_at
+      FROM (
+        SELECT *,
+          CASE
+            WHEN UPPER(list_format_address) LIKE $2 THEN 1
+            WHEN UPPER(list_format_address) LIKE $3 THEN 2
+            ELSE 3
+          END AS match_priority,
+          UPPER(list_format_address) AS normalized_address
+        FROM tobacco_licenses
+        WHERE UPPER(list_format_address) LIKE ANY($1)
+      ) AS matches
+      WHERE match_priority <= 2 AND normalized_address LIKE $4
+      ORDER BY match_priority ASC, created_at DESC
+      LIMIT 5;
+    `;
+
+    const uppercasePatterns = patterns.map(pattern => pattern.toUpperCase());
+    const firstPattern = uppercasePatterns[0] || null;
+    const secondPattern = uppercasePatterns[1] || uppercasePatterns[0] || null;
+
+    const { rows } = await client.query(sql, [uppercasePatterns, firstPattern, secondPattern, uppercasePatterns[0]]);
+    return rows;
+  }
+
+  private _normalizeBusinessName(name?: string | null): string {
+    if (!name) return '';
+    let upper = name.toUpperCase();
+    this.businessSuffixes.forEach(suffix => {
+      const regex = new RegExp(`\\b${suffix.replace('.', '\\.')}$`);
+      upper = upper.replace(regex, '');
+    });
+    return upper.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private _buildBusinessPatterns(name: string): string[] {
+    const normalized = this._normalizeBusinessName(name);
+    if (!normalized) return [];
+
+    const tokens = normalized.split(' ').filter(Boolean);
+    if (tokens.length === 0) return [];
+
+    const fullPattern = `%${tokens.join('%')}%`;
+    const partialPattern = tokens.length > 1 ? `%${tokens.slice(0, 2).join('%')}%` : fullPattern;
+
+    return [fullPattern, partialPattern];
+  }
+
+  private async _queryGsosBusinessDetails(client: Client, patterns: string[]) {
+    const sql = `
+      SELECT
+        business_name,
+        business_status,
+        business_type,
+        naics_code,
+        naics_sub_code,
+        formation_date,
+        registered_agent_name,
+        registered_agent_physical_address,
+        control_number
+      FROM (
+        SELECT *,
+          CASE
+            WHEN UPPER(business_name) LIKE $2 THEN 1
+            WHEN UPPER(business_name) LIKE $3 THEN 2
+            ELSE 3
+          END AS match_priority,
+          UPPER(business_name) AS normalized_name
+        FROM gsos_business_details
+        WHERE UPPER(business_name) LIKE ANY($1)
+      ) AS matches
+      WHERE match_priority <= 2
+      ORDER BY match_priority ASC, formation_date DESC
+      LIMIT 3;
+    `;
+
+    const uppercasePatterns = patterns.map(pattern => pattern.toUpperCase());
+    const firstPattern = uppercasePatterns[0] || null;
+    const secondPattern = uppercasePatterns[1] || uppercasePatterns[0] || null;
+
+    const { rows } = await client.query(sql, [uppercasePatterns, firstPattern, secondPattern]);
+    return rows;
+  }
+
+  private _calculateYearsAtLocation(formationDate?: string | Date | null): number | null {
+    if (!formationDate) return null;
+    const date = new Date(formationDate);
+    if (Number.isNaN(date.getTime())) return null;
+    const diffMs = Date.now() - date.getTime();
+    const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+    return Math.floor(years);
+  }
+
+  private _determineOwnershipStatus(mappedData: Record<string, any>, neonBusinessName?: string | null) {
+    if (!neonBusinessName) {
+      return {
+        status: 'unknown' as const,
+        matchedName: null,
+        neonBusinessName: null
+      };
+    }
+
+    const propertyNames = [
+      mappedData.corporationName,
+      mappedData.ownerFullName,
+      mappedData.deedOwnerFullName,
+      mappedData.deedOwnerLastName
+    ].filter(Boolean) as string[];
+
+    const normalizedNeonName = this._normalizeBusinessName(neonBusinessName);
+
+    for (const name of propertyNames) {
+      const normalizedPropertyName = this._normalizeBusinessName(name);
+      if (normalizedPropertyName && normalizedNeonName && (normalizedPropertyName === normalizedNeonName || normalizedNeonName.includes(normalizedPropertyName) || normalizedPropertyName.includes(normalizedNeonName))) {
+        return {
+          status: 'owner' as const,
+          matchedName: name,
+          neonBusinessName
+        };
+      }
+    }
+
+    return {
+      status: propertyNames.length > 0 ? 'tenant' as const : 'unknown' as const,
+      matchedName: propertyNames[0] || null,
+      neonBusinessName
+    };
+  }
+
+  private async _getNeonBusinessData(address: string, mappedData: Record<string, any>) {
+    if (!this.neonConnectionString) {
+      console.log('ℹ️ Neon connection string not configured. Skipping Neon lookup.');
+      return null;
+    }
+
+    const patterns = this._buildAddressPatterns(address);
+    if (patterns.length === 0) {
+      console.log('ℹ️ Unable to build Neon search patterns for address');
+      return null;
+    }
+
+    const client = new Client({
+      connectionString: this.neonConnectionString,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    try {
+      await client.connect();
+      const licenseRows = await this._queryTobaccoLicenses(client, patterns);
+
+      if (!licenseRows || licenseRows.length === 0) {
+        return null;
+      }
+
+      const licenseRecord = licenseRows[0];
+      const businessNamePatterns = this._buildBusinessPatterns(licenseRecord.list_format_name);
+
+      let businessRecord = null;
+      if (businessNamePatterns.length > 0) {
+        const businessRows = await this._queryGsosBusinessDetails(client, businessNamePatterns);
+        if (businessRows && businessRows.length > 0) {
+          const record = businessRows[0];
+          businessRecord = {
+            ...record,
+            yearsAtLocation: this._calculateYearsAtLocation(record.formation_date)
+          };
+        }
+      }
+
+      const ownership = this._determineOwnershipStatus(mappedData, businessRecord?.business_name || licenseRecord.list_format_name);
+
+      return {
+        license: licenseRecord,
+        business: businessRecord,
+        ownership
+      };
+    } catch (error: any) {
+      console.error('❌ Neon lookup failed:', error.message);
+      return null;
+    } finally {
+      try {
+        await client.end();
+      } catch (endError) {
+        console.error('❌ Failed to close Neon connection:', endError);
+      }
+    }
   }
 
   _calculateTotalSquareFootage(attributes: any): number | null {

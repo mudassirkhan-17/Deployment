@@ -35,6 +35,8 @@ export default function HomePage() {
   const [selectedResumeForm, setSelectedResumeForm] = useState<string | null>(null)
   const [resumedOpportunityId, setResumedOpportunityId] = useState<string | null>(null)
   const [resumedContactId, setResumedContactId] = useState<string | null>(null)
+  const [neonInsights, setNeonInsights] = useState<any>(null)
+  const [ownershipInfo, setOwnershipInfo] = useState<any>(null)
   const router = useRouter()
   const addressInputRef = useRef<HTMLInputElement>(null)
 
@@ -179,6 +181,8 @@ export default function HomePage() {
     setFetchMessage(null)
     setSmartyData(null)
     setShowSidePanelData(false)
+    setNeonInsights(null)
+    setOwnershipInfo(null)
 
     try {
       console.log('🔍 Fetching data for address:', searchAddress)
@@ -197,6 +201,14 @@ export default function HomePage() {
       if (response.ok && result.success) {
         setSmartyData(result)
         setShowSidePanelData(true)
+        setNeonInsights(result.neon || null)
+        setOwnershipInfo(result.ownership || null)
+
+        if (result.ownership?.status === 'owner') {
+          setValue('ownershipType', 'Owner')
+        } else if (result.ownership?.status === 'tenant') {
+          setValue('ownershipType', 'Tenant')
+        }
         
         // Check for validation warnings - don't show in temporary message, show in side panel
         if (result.validation && result.validation.warnings && result.validation.warnings.length > 0) {
@@ -207,15 +219,38 @@ export default function HomePage() {
         }
       } else {
         setFetchMessage(`❌ ${result.message || 'Failed to fetch data'}`)
+        setNeonInsights(null)
+        setOwnershipInfo(null)
       }
     } catch (error: any) {
       console.error('❌ Fetch error:', error)
       setFetchMessage(`❌ Error: ${error.message}`)
+      setNeonInsights(null)
+      setOwnershipInfo(null)
     } finally {
       setIsLoading(false)
       setTimeout(() => setFetchMessage(null), 5000)
     }
   }
+
+  const ownershipStatus = ownershipInfo?.status || 'unknown'
+  const ownershipBadgeStyles = ownershipStatus === 'owner'
+    ? 'bg-green-100 text-green-800 border border-green-200'
+    : ownershipStatus === 'tenant'
+      ? 'bg-orange-100 text-orange-800 border border-orange-200'
+      : 'bg-gray-100 text-gray-700 border border-gray-200'
+
+  const ownershipLabel = ownershipStatus === 'owner'
+    ? 'Insured appears to be the property owner'
+    : ownershipStatus === 'tenant'
+      ? 'Insured appears to be a tenant'
+      : 'Ownership status could not be verified'
+
+  const ownershipReason = ownershipStatus === 'owner'
+    ? `Neon business name matches property record (${ownershipInfo?.matchedName || ownershipInfo?.neonBusinessName || 'N/A'})`
+    : ownershipStatus === 'tenant'
+      ? `Neon business name differs from recorded property owner (${ownershipInfo?.matchedName || 'Property owner unknown'})`
+      : 'No matching names were found between data sources.'
 
   const fillFieldsFromSmarty = () => {
     if (!smartyData?.data) return
@@ -541,6 +576,8 @@ export default function HomePage() {
     setResumedOpportunityId(null)
     setResumedContactId(null)
     setSelectedResumeForm(null)
+    setNeonInsights(null)
+    setOwnershipInfo(null)
   }
 
   // Resume a form from GHL
@@ -959,6 +996,81 @@ export default function HomePage() {
                           : 'bg-red-100 text-red-800 border border-red-200'
                       }`}>
                         {fetchMessage}
+                      </div>
+                    )}
+
+                    {neonInsights && (
+                      <div className="mt-6 space-y-4">
+                        <div className={`p-4 rounded-lg ${ownershipBadgeStyles}`}>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-xs uppercase font-semibold tracking-wide">Ownership Insight</p>
+                              <p className="mt-1 text-base font-semibold">{ownershipLabel}</p>
+                              <p className="mt-2 text-sm opacity-80">{ownershipReason}</p>
+                            </div>
+                            <div className="text-xs font-medium opacity-70">Powered by Neon & GSOS</div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {neonInsights.license && (
+                            <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-sm font-semibold text-gray-800">Tobacco License</h4>
+                                <span className="text-xs text-gray-500">{neonInsights.license.tbl_license_type || 'N/A'}</span>
+                              </div>
+                              <dl className="space-y-2 text-sm text-gray-700">
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Business</dt>
+                                  <dd className="text-right ml-4 max-w-[60%]">{neonInsights.license.list_format_name || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">License ID</dt>
+                                  <dd className="text-right ml-4">{neonInsights.license.license_id || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Address</dt>
+                                  <dd className="text-right ml-4 max-w-[60%]">{neonInsights.license.list_format_address || 'N/A'}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                          )}
+
+                          {neonInsights.business && (
+                            <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-sm font-semibold text-gray-800">GSOS Business Details</h4>
+                                <span className="text-xs text-gray-500">{neonInsights.business.business_status || 'Status Unknown'}</span>
+                              </div>
+                              <dl className="space-y-2 text-sm text-gray-700">
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Business Name</dt>
+                                  <dd className="text-right ml-4 max-w-[60%]">{neonInsights.business.business_name || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">NAICS Code</dt>
+                                  <dd className="text-right ml-4">{neonInsights.business.naics_code || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">NAICS Subcode</dt>
+                                  <dd className="text-right ml-4">{neonInsights.business.naics_sub_code || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Years at Location</dt>
+                                  <dd className="text-right ml-4">{neonInsights.business.yearsAtLocation ?? 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Agent</dt>
+                                  <dd className="text-right ml-4 max-w-[60%]">{neonInsights.business.registered_agent_name || 'N/A'}</dd>
+                                </div>
+                                <div className="flex justify-between">
+                                  <dt className="font-medium">Agent Address</dt>
+                                  <dd className="text-right ml-4 max-w-[60%]">{neonInsights.business.registered_agent_physical_address || 'N/A'}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

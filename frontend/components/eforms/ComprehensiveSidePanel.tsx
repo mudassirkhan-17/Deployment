@@ -21,6 +21,20 @@ interface ComprehensiveDataProps {
       confidence: string
     }
     message?: string
+    neon?: {
+      license?: Record<string, any>
+      business?: Record<string, any>
+      ownership?: {
+        status: 'owner' | 'tenant' | 'unknown'
+        matchedName?: string | null
+        neonBusinessName?: string | null
+      }
+    }
+    ownership?: {
+      status: 'owner' | 'tenant' | 'unknown'
+      matchedName?: string | null
+      neonBusinessName?: string | null
+    }
   }
   onClose: () => void
   onFillFields: () => void
@@ -33,6 +47,7 @@ export function ComprehensiveSidePanel({ smartyData, onClose, onFillFields }: Co
   if (!smartyData?.data) return null
 
   const data = smartyData.data
+  const neon = smartyData.neon
   const rawData = data._rawData || {}
   const principal = rawData.principal || {}
   const datasets = rawData.datasets || {}
@@ -316,6 +331,69 @@ export function ComprehensiveSidePanel({ smartyData, onClose, onFillFields }: Co
                           <span className={`font-semibold ${data.currentlyOpen ? 'text-green-600' : 'text-red-600'}`}>
                             {data.currentlyOpen ? 'YES' : 'NO'}
                           </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {neon && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h4 className="font-bold text-purple-800 mb-3">Neon & GSOS Business Insights</h4>
+                    <div className="space-y-3 text-sm text-gray-700">
+                      {neon.ownership && (
+                        <div className={`p-3 rounded border ${neon.ownership.status === 'owner' ? 'bg-green-100 border-green-300 text-green-800' : neon.ownership.status === 'tenant' ? 'bg-orange-100 border-orange-300 text-orange-800' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>
+                          <div className="font-semibold text-xs uppercase tracking-wide">Ownership Insight</div>
+                          <div className="mt-1 font-semibold text-base">
+                            {neon.ownership.status === 'owner' ? 'Insured matches property owner' : neon.ownership.status === 'tenant' ? 'Insured appears to be a tenant' : 'Ownership could not be verified'}
+                          </div>
+                          <div className="mt-1 text-xs opacity-80">
+                            {neon.ownership.status === 'owner'
+                              ? `Matching name: ${neon.ownership.matchedName || neon.ownership.neonBusinessName || 'N/A'}`
+                              : `Neon business: ${neon.ownership.neonBusinessName || 'N/A'}`}
+                          </div>
+                        </div>
+                      )}
+
+                      {neon.license && (
+                        <div className="grid grid-cols-1 gap-2">
+                          <div className="flex justify-between">
+                            <span className="font-medium">License Business</span>
+                            <span className="ml-4 text-right max-w-[60%]">{neon.license.list_format_name || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">License ID</span>
+                            <span className="ml-4 text-right">{neon.license.license_id || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">License Address</span>
+                            <span className="ml-4 text-right max-w-[60%]">{neon.license.list_format_address || 'N/A'}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {neon.business && (
+                        <div className="grid grid-cols-1 gap-2">
+                          <div className="flex justify-between">
+                            <span className="font-medium">GSOS Business Name</span>
+                            <span className="ml-4 text-right max-w-[60%]">{neon.business.business_name || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">NAICS</span>
+                            <span className="ml-4 text-right">{neon.business.naics_code || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">Agent</span>
+                            <span className="ml-4 text-right max-w-[60%]">{neon.business.registered_agent_name || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">Agent Address</span>
+                            <span className="ml-4 text-right max-w-[60%]">{neon.business.registered_agent_physical_address || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">Years at Location</span>
+                            <span className="ml-4 text-right">{neon.business.yearsAtLocation ?? 'N/A'}</span>
+                          </div>
                         </div>
                       )}
                     </div>
