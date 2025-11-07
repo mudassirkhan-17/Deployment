@@ -16,10 +16,22 @@
 #   - Must be run from project root (deployment2/)
 
 # Color output functions
-function Write-Success { Write-Host "✅ $args" -ForegroundColor Green }
-function Write-Info { Write-Host "ℹ️  $args" -ForegroundColor Cyan }
-function Write-Warning { Write-Host "⚠️  $args" -ForegroundColor Yellow }
-function Write-Error { Write-Host "❌ $args" -ForegroundColor Red }
+function Write-Success { 
+    param([string]$Message)
+    Write-Host "[OK] $Message" -ForegroundColor Green 
+}
+function Write-Info { 
+    param([string]$Message)
+    Write-Host "[INFO] $Message" -ForegroundColor Cyan 
+}
+function Write-Warning { 
+    param([string]$Message)
+    Write-Host "[WARN] $Message" -ForegroundColor Yellow 
+}
+function Write-ErrorMsg { 
+    param([string]$Message)
+    Write-Host "[ERROR] $Message" -ForegroundColor Red 
+}
 
 Write-Host "`n🔄 Eforms Sync Script`n" -ForegroundColor Magenta
 
@@ -29,9 +41,9 @@ $PROJECT_ROOT = Get-Location
 
 # Check if eforms source directory exists
 if (-not (Test-Path $EFORMS_SOURCE)) {
-    Write-Error "Eforms source directory not found: $EFORMS_SOURCE"
+    Write-ErrorMsg "Eforms source directory not found: $EFORMS_SOURCE"
     Write-Info "Please clone the Eforms repository first:"
-    Write-Host "  git clone <eforms-repo-url> $EFORMS_SOURCE" -ForegroundColor Gray
+    Write-Host "  git clone YOUR-EFORMS-REPO-URL $EFORMS_SOURCE" -ForegroundColor Gray
     exit 1
 }
 
@@ -41,7 +53,7 @@ Set-Location $EFORMS_SOURCE
 
 # Check if it's a git repo
 if (-not (Test-Path ".git")) {
-    Write-Error "$EFORMS_SOURCE is not a git repository"
+    Write-ErrorMsg "$EFORMS_SOURCE is not a git repository"
     Set-Location $PROJECT_ROOT
     exit 1
 }
@@ -57,7 +69,7 @@ try {
         git pull origin master 2>&1 | Out-Null
     }
 } catch {
-    Write-Error "Failed to pull from remote repository"
+    Write-ErrorMsg "Failed to pull from remote repository"
     Set-Location $PROJECT_ROOT
     exit 1
 }
@@ -161,27 +173,24 @@ if ($COPIED_COUNT -gt 0) {
     Write-Host ""
     
     # Step 7: Next steps
-    Write-Host "📋 Next Steps:" -ForegroundColor Magenta
+    Write-Host "[NEXT STEPS]" -ForegroundColor Magenta
     Write-Host "  1. Review changes:" -ForegroundColor Gray
     Write-Host "     git diff" -ForegroundColor White
     Write-Host ""
-    Write-Host "  2. Check for import path issues:" -ForegroundColor Gray
-    Write-Host "     grep -r ""from '@/types/form'"" frontend/app/cstore/" -ForegroundColor White
-    Write-Host "     grep -r ""from '@/components/"" frontend/app/cstore/" -ForegroundColor White
+    Write-Host "  2. Test locally:" -ForegroundColor Gray
+    Write-Host "     cd frontend" -ForegroundColor White
+    Write-Host "     npm run dev" -ForegroundColor White
     Write-Host ""
-    Write-Host "  3. Test locally:" -ForegroundColor Gray
-    Write-Host "     cd frontend && npm run dev" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  4. Commit changes:" -ForegroundColor Gray
+    Write-Host "  3. Commit changes:" -ForegroundColor Gray
     Write-Host "     git add ." -ForegroundColor White
-    Write-Host "     git commit -m ""sync: update Eforms to latest version""" -ForegroundColor White
+    Write-Host "     git commit -m 'sync: update Eforms to latest version'" -ForegroundColor White
     Write-Host ""
-    Write-Host "  5. Push to GitHub:" -ForegroundColor Gray
+    Write-Host "  4. Push to GitHub:" -ForegroundColor Gray
     Write-Host "     git push origin testing" -ForegroundColor White
     Write-Host ""
     
-    Write-Success "Sync complete! Review changes and test before committing."
+    Write-Success "Sync complete! Review changes and test before committing"
 } else {
-    Write-Success "No files needed to be copied (changes were in non-tracked files)."
+    Write-Success "No files needed to be copied - changes were in non-tracked files"
 }
 
