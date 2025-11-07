@@ -4,8 +4,10 @@ backend/.env
 .env
 dump.rdb
 
-# Temporary Eforms folder
+# Temporary Eforms folder (source repo for syncing)
 Eform/
+eforms/
+eforms-source/
 
 # Environment variables
 .env.local
