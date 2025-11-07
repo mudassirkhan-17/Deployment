@@ -163,14 +163,21 @@ export default function SummaryPage() {
         }
       });
 
-      // Send to backend
-      const response = await fetch(`${apiUrl}/upload-quotes/`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'ngrok-skip-browser-warning': 'true',
-        },
-      });
+      // Send to backend with extended timeout for large files
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds (2 minutes)
+      
+      try {
+        const response = await fetch(`${apiUrl}/upload-quotes/`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'ngrok-skip-browser-warning': 'true',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
 
       let data: UploadResponse;
       try {
@@ -190,6 +197,13 @@ export default function SummaryPage() {
 
       setUploadResult(data);
       console.log('Upload successful:', data);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Upload timeout: Large files may take up to 2 minutes to process. Please try again or use smaller files.');
+        }
+        throw fetchError;
+      }
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to upload carriers';
       setUploadError(errorMessage);
