@@ -189,7 +189,16 @@ if ($COPIED_COUNT -gt 0) {
     Write-Host "     git push origin testing" -ForegroundColor White
     Write-Host ""
     
-    Write-Success "Sync complete! Review changes and test before committing"
+    Write-Success "Sync complete! Now applying automated fixes..."
+    Write-Host ""
+    
+    # Run the automated fix script
+    if (Test-Path "fix-eforms-sync.ps1") {
+        & .\fix-eforms-sync.ps1
+    } else {
+        Write-Warning "fix-eforms-sync.ps1 not found - skipping automated fixes"
+        Write-Host "  Run manually: .\fix-eforms-sync.ps1" -ForegroundColor Cyan
+    }
 } else {
     Write-Success "No files needed to be copied - changes were in non-tracked files"
 }
