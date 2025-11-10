@@ -513,9 +513,9 @@ def process_upload_llm_extraction_liquor(upload_id: str) -> Dict[str, Any]:
                         print(f"  Processing Liquor Chunk {chunk['chunk_num']}/{len(chunks)}...")
                         return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
                     
-                    # Process all chunks in parallel
+                    # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
                     chunk_results = Parallel(
-                        n_jobs=-1,
+                        n_jobs=2,
                         backend='threading',
                         verbose=5
                     )(

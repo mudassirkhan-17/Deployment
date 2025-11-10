@@ -156,7 +156,7 @@ def extract_with_tesseract_ocr(pdf_bytes: bytes, page_num: int) -> Dict[str, Any
         }
 
 
-def process_all_pages_with_ocr(pdf_bytes: bytes, total_pages: int, n_jobs: int = 4) -> Dict[str, Any]:
+def process_all_pages_with_ocr(pdf_bytes: bytes, total_pages: int, n_jobs: int = 2) -> Dict[str, Any]:
     """
     Process ALL pages with Tesseract OCR - PARALLELIZED with Joblib
     
