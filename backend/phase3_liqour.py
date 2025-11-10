@@ -2,6 +2,7 @@
 Phase 3 Liquor: LLM Information Extraction for Liquor/Bar Insurance
 Extracts 9 specific liquor coverage fields from insurance documents using GPT.
 Works with Google Cloud Storage.
+Uses Joblib for parallel chunk processing.
 """
 import json
 import openai
@@ -11,6 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 from google.cloud import storage
 from dotenv import load_dotenv
+from joblib import Parallel, delayed
 
 load_dotenv()
 
@@ -490,12 +492,23 @@ def process_upload_llm_extraction_liquor(upload_id: str) -> Dict[str, Any]:
                     # Create chunks (4 pages each)
                     chunks = create_chunks(all_pages, chunk_size=4)
                     
-                    # Process each chunk with LLM
-                    chunk_results = []
-                    for chunk in chunks:
-                        print(f"\nProcessing Chunk {chunk['chunk_num']}/{len(chunks)}...")
-                        result = extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
-                        chunk_results.append(result)
+                    # Process each chunk with LLM - PARALLELIZED for faster processing
+                    print(f"\nProcessing {len(chunks)} Liquor chunks in parallel...")
+                    
+                    def process_single_chunk(chunk):
+                        """Process one chunk - called in parallel"""
+                        print(f"  Processing Liquor Chunk {chunk['chunk_num']}/{len(chunks)}...")
+                        return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
+                    
+                    # Process all chunks in parallel
+                    chunk_results = Parallel(
+                        n_jobs=-1,
+                        backend='threading',
+                        verbose=5
+                    )(
+                        delayed(process_single_chunk)(chunk)
+                        for chunk in chunks
+                    )
                     
                     # Merge all results
                     print(f"\nMerging results from {len(chunk_results)} chunks...")

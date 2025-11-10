@@ -33,8 +33,8 @@ def process_ocr_task(upload_id: str):
     Returns immediately to caller, OCR runs in background.
     """
     try:
-        # from phase2_ocr import process_upload_ocr_analysis
-        from phase2_ocr_nano import process_upload_ocr_analysis
+        from phase2_ocr import process_upload_ocr_analysis
+        # from phase2_ocr_nano import process_upload_ocr_analysis
         print(f"📦 Starting OCR task for upload: {upload_id}")
         result = process_upload_ocr_analysis(upload_id)
         

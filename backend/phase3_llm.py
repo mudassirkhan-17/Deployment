@@ -2,6 +2,7 @@
 Phase 3: LLM Information Extraction
 Extracts 34 specific property coverage fields from insurance documents using GPT.
 Works with Google Cloud Storage.
+Uses Joblib for parallel chunk processing.
 """
 import json
 import openai
@@ -11,6 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 from google.cloud import storage
 from dotenv import load_dotenv
+from joblib import Parallel, delayed
 
 load_dotenv()
 
@@ -507,22 +509,35 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 # Create chunks (4 pages each)
                 chunks = create_chunks(all_pages, chunk_size=4)
                 
-                # Process each chunk with LLM - route to correct extractor based on file type
-                chunk_results = []
-                for chunk in chunks:
-                    print(f"\nProcessing Chunk {chunk['chunk_num']}/{len(chunks)}...")
+                # Process each chunk with LLM - PARALLELIZED for faster processing
+                # Route to correct extractor based on file type
+                print(f"\nProcessing {len(chunks)} chunks in parallel...")
+                
+                def process_single_chunk(chunk):
+                    """Process one chunk - called in parallel"""
+                    print(f"  Processing Chunk {chunk['chunk_num']}/{len(chunks)}...")
                     if file_type == 'liabilityPDF':
                         # Import GL-specific extractor for liability
                         from phase3_gl import extract_with_llm as extract_with_llm_gl
-                        result = extract_with_llm_gl(chunk, chunk['chunk_num'], len(chunks))
+                        return extract_with_llm_gl(chunk, chunk['chunk_num'], len(chunks))
                     elif file_type == 'liquorPDF':
                         # Import Liquor-specific extractor for liquor
                         from phase3_liqour import extract_with_llm as extract_with_llm_liquor
-                        result = extract_with_llm_liquor(chunk, chunk['chunk_num'], len(chunks))
+                        return extract_with_llm_liquor(chunk, chunk['chunk_num'], len(chunks))
                     else:
                         # Use property extraction for property PDFs
-                        result = extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
-                    chunk_results.append(result)
+                        return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
+                
+                # Process all chunks in parallel (n_jobs=-1 uses all available cores)
+                # backend='threading' is perfect for I/O-bound LLM API calls
+                chunk_results = Parallel(
+                    n_jobs=-1,
+                    backend='threading',
+                    verbose=5
+                )(
+                    delayed(process_single_chunk)(chunk)
+                    for chunk in chunks
+                )
                 
                 # Merge all results - route to correct merge function based on file type
                 print(f"\nMerging results from {len(chunk_results)} chunks...")
