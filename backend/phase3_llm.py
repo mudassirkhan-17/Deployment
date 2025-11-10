@@ -132,17 +132,37 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
     
     THE 34 SPECIFIC FIELDS TO EXTRACT (with examples):
     1. Construction Type - Look for: "FRAME", "Frame", "Joisted Masonry", "Masonry Non-Combustible"
-    2. Valuation and Coinsurance - Look for: "Replacement Cost, 80%", "Actual Cash Value"
+    2. Valuation and Coinsurance - Look for: "Replacement Cost, 80%", "RC, 90%", "Actual Cash Value"
+       CRITICAL: Valuation and Coinsurance are often in SEPARATE columns/fields in tables:
+       - Column 1: "Valuation: RC" or "Valuation: Replacement Cost" or just "RC"
+       - Column 2: "Coins %: 90%" or "Coinsurance: 80%" or just "90%"
+       You MUST find BOTH parts and COMBINE them as "RC, 90%" or "Replacement Cost, 90%"
+       Common abbreviations: RC = Replacement Cost, ACV = Actual Cash Value
     3. Cosmetic Damage - Look for: "Excluded", "Included", "Cosmetic Damage is Excluded"
-    4. Building - Look for: "$500,000", "$600,000", "Coverage not required"
-    5. Pumps - Look for: "$10,000.00", "$60,000"
-    6. Canopy - Look for: "$40,000", "$100,000"
+    4. Building - Look for: "$500,000", "$648,000 (RC, 90%)", "Coverage not required"
+       CRITICAL: If in a table with Valuation and Coins % columns, include them: "$648,000 (RC, 90%)"
+    5. Pumps - Look for: "$10,000.00", "$160,000 (RC, 90%)"
+       CRITICAL: If in a table with Valuation and Coins % columns, include them: "$160,000 (RC, 90%)"
+    6. Canopy - Look for: "$40,000", "$160,000 (RC, 90%)"
+       CRITICAL: If in a table with Valuation and Coins % columns, include them: "$160,000 (RC, 90%)"
     7. ROOF EXCLUSION - Look for: "Included", "Excluded", "Cosmetic Damage is Excluded"
-    8. Roof Surfacing - Look for: "ACV only applies to roofs that are more than 15 years old"
-    9. Roof Surfacing -Limitation - Look for: "ACV on Roof", "Cosmetic Damage is Excluded"
-    10. Business Personal Property - Look for: "$50,000.00", "$200,000", "$125,000"
-    11. Business Income - Look for: "$100,000", "$100,000 (1/6)", "$100,000 (1/3)"
-    12. Business Income with Extra Expense - Look for: "$100,000", "with Extra Expense"
+    8. Roof Surfacing - Look for: "ACV only applies to roofs that are more than 15 years old", "CP 10 36", "CP 10 36 applies"
+       CRITICAL: Often appears in "Subject to:" sections as "CP 10 36 – Limitations on Coverage for Roof Surfacing applies"
+       ALSO check endorsement/form lists for "CP 10 36 10 12" or similar codes
+       Extract as: "CP 10 36 applies" or "Limitations on Coverage for Roof Surfacing applies" or the full text found
+       Form codes like "CP 10 36" are VALID VALUES - DO NOT leave empty if you find them
+    9. Roof Surfacing -Limitation - Look for: "ACV on Roof", "Cosmetic Damage is Excluded", "CP 10 36"
+       CRITICAL: If "CP 10 36" is mentioned anywhere in Subject to/endorsements, extract it here too
+       Extract as: "CP 10 36 applies" or "Limitations on Coverage for Roof Surfacing applies"
+       This field and "Roof Surfacing" often have the SAME value when referencing form codes
+    10. Business Personal Property - Look for: "$50,000.00", "$50,000 (RC, 90%)", "$200,000"
+        If in a table with Valuation and Coins % columns, include them: "$50,000 (RC, 90%)"
+    11. Business Income - Look for: "$100,000", "$120,000 (RC, 1/6)", "$100,000 (RC, 1/3)", "$100,000"
+        NOTE: Business Income often has coinsurance 1/6 or 1/3 (different from 90%)
+        If in a table with Valuation and Coins % columns, include them: "$100,000 (RC, 1/3)"
+        Extract dollar amount even if valuation/coinsurance not shown
+    12. Business Income with Extra Expense - Look for: "$100,000", "$100,000 (RC, 1/6)", "$100,000 (RC, 1/3)"
+        If in a table with Valuation and Coins % columns, include them
     13. Equipment Breakdown - Look for: "Included", "$225,000"
     14. Outdoor Signs - Look for: "$10,000", "$5,000", "Included", "Deductible $250"
     15. Signs Within 1,000 Feet to Premises - Look for: any signs within 1,000 feet coverage
@@ -151,19 +171,32 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
     18. Money and Securities (Inside; Outside) - Look for: separate inside/outside limits
     19. Spoilage - Look for: "$5,000", "$10,000", "Deductible $250"
     20. Theft - Look for: "Sublimit: $5,000", "Ded: $2,500", "Sublimit $10,000"
-    21. Theft Sublimit - Look for: "$5,000", "$15,000", "$10,000"
-    22. Theft Deductible - Look for: "$2,500", "$1,000", "$250"
-    23. Windstorm or Hail - Look for: "$2,500", "2%", "1%", "Min Per Building"
+    21. Theft Sublimit - Look for: "$5,000", "$15,000", "$10,000", "Theft Sublimit: $10,000"
+        May appear in endorsement sections or main tables
+    22. Theft Deductible - Look for: "$2,500", "$1,000", "$250", "Theft Deductible: $1,000"
+        May appear in endorsement sections or main tables
+    23. Windstorm or Hail - Look for: "$2,500", "2%", "1%", "Min Per Building", "Excluded", "$2,500 Min"
+        Often in coverage tables under "Wind/Hail Ded" column
+        Can be dollar amount, percentage, or "Excluded"
     24. Named Storm Deductible - Look for: any named storm deductible
     25. Wind and Hail and Named Storm exclusion - Look for: any wind/hail/named storm exclusion
-    26. All Other Perils Deductible - Look for: "$2,500", "$1,000"
+    26. All Other Perils Deductible - Look for: "$2,500", "$1,000", "$5,000", "$5000"
+        Often in coverage tables under "AOP Ded" column - extract the dollar amount shown
+        Extract ANY dollar amount found near "AOP" or "All Other Perils"
     27. Fire Station Alarm - Look for: "$2,500.00", "Local", "Central"
     28. Burglar Alarm - Look for: "Local", "Central", "Active Central Station"
     29. Terrorism - Look for: "APPLIES", "Excluded", "Included", "Can be added"
+        Also look for: "TRIA", "Subject to TRIA", "Terrorism Risk Insurance Act"
     30. Protective Safeguards Requirements - Look for: any protective safeguards requirements
     31. Minimum Earned Premium (MEP) - Look for: "25%", "MEP: 25%", "35%"
-    32. Property Premium - Look for: "$2,019.68", "TOTAL excl Terrorism", "TOTAL CHARGES W/O TRIA"
+    32. Property Premium - Look for: "TOTAL CHARGES W/O TRIA $7,176.09", "W/O TRIA $7,176.09, WITH TRIA $7,441.13"
+        CRITICAL: Look for "TOTAL CHARGES" or "Total Premium (With/Without Terrorism)" - NOT "Property Premium"
+        "Property Premium" is base only; we need TOTAL which includes endorsements
+        DO NOT extract from "Summary of Cost" section (that combines all policies - property, GL, liquor)
+        Extract from property coverage section as: "W/O TRIA $7,176.09, WITH TRIA $7,441.13" or single value
     33. Total Premium (With/Without Terrorism) - Look for: "W/O TRIA $7,176.09, WITH TRIA $7,441.13"
+        Same as Property Premium - look for TOTAL CHARGES, not base property premium
+        DO NOT extract from "Summary of Cost" section
     34. Policy Premium - Look for: "$2,500.00", "Policy Premium", "Base Premium"
     
     EXTRACTION RULES:
@@ -172,27 +205,80 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
     - For Dollar Amounts: Look for any dollar amounts ($X,XXX, $X,XXX.XX)
     - For Percentages: Look for any percentages (X%, X.X%)
     - For Deductibles: Look for "Deductible", "Ded", "Min", "Per" with amounts
+      * Check coverage tables for columns like "Wind/Hail Ded", "AOP Ded", etc.
+      * Can be: dollar amounts ($5,000), percentages (2%), or status (Excluded)
     - For Sublimits: Look for "Sublimit", "Limit", "Max" with amounts
     - For Coverage Status: Look for "Included", "Excluded", "Not Offered", "Coverage not required"
+    - For "Valuation and Coinsurance": MUST extract TWO pieces and combine them:
+      * Part 1 (Valuation): RC, Replacement Cost, ACV, Actual Cash Value
+      * Part 2 (Coinsurance %): Look for "Coins %", "Coinsurance", or percentage (80%, 90%, 100%)
+      * COMBINE as: "RC, 90%" or "Replacement Cost, 80%" - DO NOT extract just "RC" alone
+      * If in a table, these may be in separate columns - find both and combine them
+    - For COVERAGE AMOUNTS (Building, Pumps, Canopy, BPP, Business Income):
+      * If in a TABLE with Valuation and Coins % columns, include them: "$648,000 (RC, 90%)"
+      * Example: "Building #01 $648,000 RC 90%" should extract as "$648,000 (RC, 90%)"
+      * Business Income often has 1/6 or 1/3 coinsurance instead of 90%
+      * If valuation columns not present, extract just the dollar amount
+    - For FORM CODES (Roof Surfacing, Terrorism, Windstorm):
+      * Form codes like "CP 10 36", "TRIA" are VALID VALUES
+      * Often appear in "Subject to:" sections at the end of quotes
+      * Extract as "CP 10 36 applies" or "TRIA" - these are complete values
+    - For ENDORSEMENT SECTIONS (Theft Sublimit/Deductible, Outdoor Signs, etc.):
+      * Check "Additional Endorsements" or "Additional Coverages" sections
+      * Format: "Field Name: $value" (e.g., "Theft Sublimit: $10,000")
+    - For PREMIUM EXTRACTION (Property Premium, Total Premium):
+      * Extract ONLY "TOTAL CHARGES" or "Total Premium" from property coverage section
+      * If document shows BOTH "Property Premium" ($6,303) and "Total Premium" ($7,176), extract the TOTAL
+      * "Property Premium" = base coverage only; "Total Premium" = base + endorsements (we want TOTAL)
+      * CRITICAL: DO NOT extract from "Summary of Cost" section at the end
+      * "Summary of Cost" combines property + GL + liquor + fees = wrong value
+      * Look for "TOTAL CHARGES W/O TRIA" or "Total Premium (With/Without Terrorism)" in property section
     - If field is not found, set to null
     - Do NOT hallucinate or make up values
-    - Do NOT combine or modify existing values
+    - Do NOT combine or modify existing values (EXCEPT for Valuation/Coinsurance and Coverage Amounts as noted above)
     - Do NOT extract administrative, financial, or policy information
     
     IMPORTANT: This is chunk {chunk_num} of {total_chunks}. This chunk contains pages {chunk['page_nums']}.
     
-    For each field you find, look for the nearest page number in the text above it.
-    Use the actual page number from the text. Multiple fields can be on the same page.
+    CRITICAL PAGE NUMBER EXTRACTION:
+    - The document text below has clear page markers: "=== PAGE X (OCR) ===" or "=== PAGE X (PyMuPDF) ==="
+    - For each field you extract, find which "=== PAGE X ===" section it appears in
+    - Extract the EXACT page number X from that section marker
+    - Look BACKWARDS from the field to find the most recent "=== PAGE X ===" marker
+    - DO NOT guess or estimate page numbers - use the exact number from the marker
+    - Multiple fields can be on the same page
+    
+    Example: If you see:
+    === PAGE 7 (OCR) ===
+    Commercial Property
+    Building #01: $648,000
+    Construction: MNC
+    
+    Then "Construction Type" should have page: 7 (because it's under "=== PAGE 7 ===" marker)
     
     CRITICAL: Return ONLY valid JSON with this exact format:
     {{
-        "Construction Type": {{"value": "FRAME", "page": 5}},
-        "Building": {{"value": "$500,000", "page": 5}},
-        "Property Premium": {{"value": "$2,019.68", "page": 3}},
-        "Total Premium (With/Without Terrorism)": {{"value": "Without Terrorism: $2,019.68, With Terrorism: $2,123.68", "page": 3}}
+        "Construction Type": {{"value": "MNC", "page": 7}},
+        "Building": {{"value": "$648,000 (RC, 90%)", "page": 7}},
+        "Business Income": {{"value": "$120,000 (RC, 1/6)", "page": 7}},
+        "Roof Surfacing": {{"value": "CP 10 36 applies", "page": 9}},
+        "Roof Surfacing -Limitation": {{"value": "Limitations on Coverage for Roof Surfacing applies", "page": 9}},
+        "Windstorm or Hail": {{"value": "Excluded", "page": 7}},
+        "All Other Perils Deductible": {{"value": "$5,000", "page": 7}},
+        "Theft Sublimit": {{"value": "$10,000", "page": 8}},
+        "Theft Deductible": {{"value": "$1,000", "page": 8}},
+        "Terrorism": {{"value": "TRIA", "page": 9}},
+        "Property Premium": {{"value": "W/O TRIA $7,176.09, WITH TRIA $7,441.13", "page": 9}}
     }}
     
     If a field is not found, use: {{"value": null, "page": null}}
+    
+    IMPORTANT: 
+    - Check entire document: main tables, endorsement sections, and "Subject to:" sections
+    - For Premium: Extract "TOTAL CHARGES" from property section, NOT "Summary of Cost" at end
+    - If both "Property Premium" and "Total Premium" exist, extract the TOTAL (includes endorsements)
+    - "Summary of Cost" section combines all policies (property + GL + liquor) - DO NOT use it
+    
     Do not provide explanations, context, or any text outside the JSON object.
     
     Document text:

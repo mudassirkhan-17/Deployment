@@ -178,8 +178,21 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
     
     IMPORTANT: This is chunk {chunk_num} of {total_chunks}. This chunk contains pages {chunk['page_nums']}. 
     
-    For each field you find, look for the nearest page number in the text above it (e.g., "Page 3", "Page 5"). 
-    Use the actual page number from the text. Multiple fields can be on the same page.
+    CRITICAL PAGE NUMBER EXTRACTION:
+    - The document text below has clear page markers: "=== PAGE X (OCR) ===" or "=== PAGE X (PyMuPDF) ==="
+    - For each field you extract, find which "=== PAGE X ===" section it appears in
+    - Extract the EXACT page number X from that section marker
+    - Look BACKWARDS from the field to find the most recent "=== PAGE X ===" marker
+    - DO NOT guess or estimate page numbers - use the exact number from the marker
+    - Multiple fields can be on the same page
+    
+    Example: If you see:
+    === PAGE 7 (OCR) ===
+    General Liability
+    Each Occurrence: $1,000,000
+    General Aggregate: $2,000,000
+    
+    Then those limits should have page: 7 (because they're under "=== PAGE 7 ===" marker)
     
     CRITICAL: Return ONLY valid JSON with this exact format:
     {{
