@@ -132,12 +132,15 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
     
     THE 34 SPECIFIC FIELDS TO EXTRACT (with examples):
     1. Construction Type - Look for: "FRAME", "Frame", "Joisted Masonry", "Masonry Non-Combustible"
-    2. Valuation and Coinsurance - Look for: "Replacement Cost, 80%", "RC, 90%", "Actual Cash Value"
-       CRITICAL: Valuation and Coinsurance are often in SEPARATE columns/fields in tables:
-       - Column 1: "Valuation: RC" or "Valuation: Replacement Cost" or just "RC"
-       - Column 2: "Coins %: 90%" or "Coinsurance: 80%" or just "90%"
-       You MUST find BOTH parts and COMBINE them as "RC, 90%" or "Replacement Cost, 90%"
-       Common abbreviations: RC = Replacement Cost, ACV = Actual Cash Value
+    2. Valuation and Coinsurance - Look for: "RC, 90%", "Replacement Cost, 80%", "Actual Cash Value"
+       This is the GENERAL/DEFAULT valuation policy shown as its own field
+       Extract as standalone value: "RC, 90%" (WITHOUT dollar amounts or coverage names)
+       Often appears in its own table row or after "Valuation and Coinsurance:" label
+       CRITICAL: Valuation and Coinsurance are often in SEPARATE columns - find BOTH and COMBINE:
+       - Part 1: "Valuation: RC" or "Replacement Cost" 
+       - Part 2: "Coins %: 90%" or "Coinsurance: 80%"
+       - COMBINE as: "RC, 90%" or "Replacement Cost, 90%"
+       This field is SEPARATE from individual coverage valuations (Building, Pumps, etc.)
     3. Cosmetic Damage - Look for: "Excluded", "Included", "Cosmetic Damage is Excluded"
     4. Building - Look for: "$500,000", "$648,000 (RC, 90%)", "Coverage not required"
        CRITICAL: If in a table with Valuation and Coins % columns, include them: "$648,000 (RC, 90%)"
@@ -209,11 +212,15 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
       * Can be: dollar amounts ($5,000), percentages (2%), or status (Excluded)
     - For Sublimits: Look for "Sublimit", "Limit", "Max" with amounts
     - For Coverage Status: Look for "Included", "Excluded", "Not Offered", "Coverage not required"
-    - For "Valuation and Coinsurance": MUST extract TWO pieces and combine them:
-      * Part 1 (Valuation): RC, Replacement Cost, ACV, Actual Cash Value
-      * Part 2 (Coinsurance %): Look for "Coins %", "Coinsurance", or percentage (80%, 90%, 100%)
-      * COMBINE as: "RC, 90%" or "Replacement Cost, 80%" - DO NOT extract just "RC" alone
-      * If in a table, these may be in separate columns - find both and combine them
+    - For "Valuation and Coinsurance" (Field #2 - standalone general field):
+      * This is the GENERAL valuation policy shown as its own separate field
+      * Extract as standalone: "RC, 90%" WITHOUT coverage names or dollar amounts
+      * MUST extract TWO pieces and combine them:
+        - Part 1 (Valuation): RC, Replacement Cost, ACV, Actual Cash Value
+        - Part 2 (Coinsurance %): Look for "Coins %", "Coinsurance", or percentage (80%, 90%, 100%)
+        - COMBINE as: "RC, 90%" or "Replacement Cost, 80%" - DO NOT extract just "RC" alone
+      * Often in separate columns in table - find both parts and combine them
+      * This is DIFFERENT from coverage-specific valuations (Building, Business Income, etc.)
     - For COVERAGE AMOUNTS (Building, Pumps, Canopy, BPP, Business Income):
       * If in a TABLE with Valuation and Coins % columns, include them: "$648,000 (RC, 90%)"
       * Example: "Building #01 $648,000 RC 90%" should extract as "$648,000 (RC, 90%)"
