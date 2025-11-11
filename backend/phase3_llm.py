@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 from google.cloud import storage
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+from schemas.property_schema import PROPERTY_FIELDS_SCHEMA, get_field_names, get_required_fields
 
 load_dotenv()
 
@@ -368,24 +369,15 @@ def merge_extraction_results(all_results: List[Dict[str, Any]]) -> Dict[str, Any
     """Merge results from all chunks, prioritizing non-null values"""
     
     # Define the expected fields
-    expected_fields = [
-        "Construction Type", "Valuation and Coinsurance", "Cosmetic Damage", "Building",
-        "Pumps", "Canopy", "ROOF EXCLUSION", "Roof Surfacing", "Roof Surfacing -Limitation",
-        "Business Personal Property", "Business Income", "Business Income with Extra Expense",
-        "Equipment Breakdown", "Outdoor Signs", "Signs Within 1,000 Feet to Premises",
-        "Employee Dishonesty", "Money & Securities", "Money and Securities (Inside; Outside)",
-        "Spoilage", "Theft", "Theft Sublimit", "Theft Deductible", "Windstorm or Hail",
-        "Named Storm Deductible", "Wind and Hail and Named Storm exclusion",
-        "All Other Perils Deductible", "Fire Station Alarm", "Burglar Alarm", "Terrorism",
-        "Protective Safeguards Requirements", "Minimum Earned Premium (MEP)", "Property Premium",
-        "Total Premium (With/Without Terrorism)", "Policy Premium"
-    ]
+    # Use schema to initialize fields in correct order
+    # This ensures Google Sheets always has consistent field ordering
+    expected_field_names = get_field_names()  # From schema - guaranteed order
     
     merged_result = {}
     
-    # Initialize all expected fields as null
-    for field in expected_fields:
-        merged_result[field] = None
+    # Initialize all expected fields as null (schema order preserved)
+    for field_name in expected_field_names:
+        merged_result[field_name] = None
     
     # Collect all unique fields found by LLM
     all_found_fields = set()

@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 from google.cloud import storage
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+from schemas.liquor_schema import LIQUOR_FIELDS_SCHEMA, get_liquor_field_names, get_liquor_required_fields
 
 load_dotenv()
 
@@ -280,24 +281,15 @@ def extract_with_llm(chunk, chunk_num, total_chunks):
 def merge_extraction_results(all_results):
     """Merge results from all chunks, prioritizing non-null values"""
     
-    # Define the expected fields for LIQUOR INSURANCE
-    expected_fields = [
-        "Each Occurrence/General Aggregate Limits",
-        "Sales - Subject to Audit",
-        "Assault & Battery/Firearms/Active Assailant",
-        "Requirements",
-        "If any subjectivities in quote please add",
-        "Minimum Earned",
-        "Liquor Premium",
-        "Total Premium (With/Without Terrorism)",
-        "Policy Premium"
-    ]
+    # Use schema to initialize Liquor fields in correct order
+    # This ensures Google Sheets always has consistent field ordering
+    expected_field_names = get_liquor_field_names()  # From Liquor schema - guaranteed order
     
     merged_result = {}
     
-    # Initialize all expected fields as null
-    for field in expected_fields:
-        merged_result[field] = None
+    # Initialize all expected fields as null (schema order preserved)
+    for field_name in expected_field_names:
+        merged_result[field_name] = None
     
     # Collect all unique fields found by LLM
     all_found_fields = set()

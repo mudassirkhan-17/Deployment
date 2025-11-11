@@ -9,10 +9,13 @@ from google.oauth2.service_account import Credentials
 import os
 import re
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from google.cloud import storage
 from dotenv import load_dotenv
 from pathlib import Path
+from schemas.property_schema import PROPERTY_FIELDS_SCHEMA, get_field_names
+from schemas.gl_schema import GL_FIELDS_SCHEMA, get_gl_field_names
+from schemas.liquor_schema import LIQUOR_FIELDS_SCHEMA, get_liquor_field_names
 
 load_dotenv()
 
@@ -52,6 +55,168 @@ def _get_credentials_path() -> str:
         return creds_path
     
     raise Exception("Google Sheets credentials not found! Please provide credentials.json")
+
+
+class SheetBuilder:
+    """
+    Robust Google Sheets builder with row tracking and dynamic formatting.
+    Builds sheets incrementally while tracking exact row positions.
+    """
+    
+    def __init__(self, sheet, carriers: List[str]):
+        self.sheet = sheet
+        self.spreadsheet = sheet.spreadsheet
+        self.carriers = carriers
+        self.current_row = 0  # 0-indexed, will be incremented as we add rows
+        self.format_requests = []  # Batch formatting requests
+        self.all_rows = []  # Collect all rows for batch write
+        
+    def add_company_header(self, company_name: str = "Mckinney & Co. Insurance"):
+        """Add company header row with green formatting"""
+        self.all_rows.append([company_name])
+        
+        # Format company header (green background, white text, bold, centered)
+        self.format_requests.append({
+            'repeatCell': {
+                'range': {
+                    'sheetId': 0,
+                    'startRowIndex': self.current_row,
+                    'endRowIndex': self.current_row + 1,
+                    'startColumnIndex': 0,
+                    'endColumnIndex': max(len(self.carriers) * 2 + 1, 10)  # Dynamic columns
+                },
+                'cell': {
+                    'userEnteredFormat': {
+                        'backgroundColor': {'red': 0.2, 'green': 0.6, 'blue': 0.2},
+                        'textFormat': {
+                            'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0},
+                            'bold': True,
+                            'fontSize': 14
+                        },
+                        'horizontalAlignment': 'CENTER',
+                        'wrapStrategy': 'WRAP'
+                    }
+                },
+                'fields': 'userEnteredFormat'
+            }
+        })
+        
+        self.current_row += 1
+        self.all_rows.append([])  # Empty row for spacing
+        self.current_row += 1
+        
+    def add_section(self, section_name: str, field_schema: List, carrier_data: Dict[str, Dict[str, Any]]):
+        """
+        Add a complete section (Property/GL/Liquor) with schema-based ordering.
+        
+        Args:
+            section_name: Display name for section (e.g., "Property Coverages")
+            field_schema: Schema list (PROPERTY_FIELDS_SCHEMA, GL_FIELDS_SCHEMA, etc.)
+            carrier_data: Dict[carrier_name][field_name] = field_data
+        """
+        # Section header row (black background, white text)
+        self.all_rows.append([section_name])
+        
+        self.format_requests.append({
+            'repeatCell': {
+                'range': {
+                    'sheetId': 0,
+                    'startRowIndex': self.current_row,
+                    'endRowIndex': self.current_row + 1,
+                    'startColumnIndex': 0,
+                    'endColumnIndex': max(len(self.carriers) * 2 + 1, 10)
+                },
+                'cell': {
+                    'userEnteredFormat': {
+                        'backgroundColor': {'red': 0.0, 'green': 0.0, 'blue': 0.0},
+                        'textFormat': {
+                            'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0},
+                            'bold': True,
+                            'fontSize': 13
+                        },
+                        'horizontalAlignment': 'CENTER'
+                    }
+                },
+                'fields': 'userEnteredFormat'
+            }
+        })
+        
+        self.current_row += 1
+        self.all_rows.append([])  # Empty row for spacing
+        self.current_row += 1
+        
+        # Column headers (gray background, bold)
+        headers = ["Field Name"]
+        for carrier in self.carriers:
+            headers.extend([f"LLM Value ({carrier})", f"Source Page ({carrier})"])
+        self.all_rows.append(headers)
+        
+        self.format_requests.append({
+            'repeatCell': {
+                'range': {
+                    'sheetId': 0,
+                    'startRowIndex': self.current_row,
+                    'endRowIndex': self.current_row + 1,
+                    'startColumnIndex': 0,
+                    'endColumnIndex': len(headers)
+                },
+                'cell': {
+                    'userEnteredFormat': {
+                        'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9},
+                        'textFormat': {'bold': True, 'fontSize': 11},
+                        'horizontalAlignment': 'LEFT',
+                        'wrapStrategy': 'WRAP'
+                    }
+                },
+                'fields': 'userEnteredFormat'
+            }
+        })
+        
+        self.current_row += 1
+        
+        # Data rows (using SCHEMA ORDER - guaranteed consistency!)
+        for field_def in field_schema:
+            row = [field_def.name]
+            
+            for carrier in self.carriers:
+                carrier_fields = carrier_data.get(carrier, {})
+                if carrier_fields and field_def.name in carrier_fields:
+                    field_data = carrier_fields[field_def.name]
+                    llm_value = field_data.get('llm_value', '')
+                    source_page = field_data.get('source_page', '')
+                    
+                    # Handle None values
+                    if llm_value is None:
+                        llm_value = ''
+                    if source_page is None:
+                        source_page = ''
+                    
+                    row.extend([str(llm_value), str(source_page)])
+                else:
+                    row.extend(['', ''])
+            
+            self.all_rows.append(row)
+            self.current_row += 1
+        
+        # Add spacing after section
+        self.all_rows.append([])
+        self.current_row += 1
+        self.all_rows.append([])
+        self.current_row += 1
+    
+    def write_all_data(self):
+        """Write all collected rows to sheet in one batch"""
+        if self.all_rows:
+            print(f"📤 Writing {len(self.all_rows)} rows to Google Sheets...")
+            self.sheet.update('A1', self.all_rows)
+            print(f"✅ Data written successfully!")
+    
+    def apply_all_formatting(self):
+        """Apply all collected formatting requests in one batch"""
+        if self.format_requests:
+            print(f"🎨 Applying {len(self.format_requests)} formatting requests...")
+            self.spreadsheet.batch_update({'requests': self.format_requests})
+            print(f"✅ Formatting applied successfully!")
 
 
 def push_to_sheets_from_gcs(bucket: storage.bucket.Bucket, data_path: str, sheet_name: str = "Insurance Fields Data"):
@@ -563,137 +728,64 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
         sheet.clear()
         print("✅ Cleared existing data")
         
-        # 6. Build complete layout
-        print(f"\n📊 Building side-by-side layout...")
-        all_rows = []
+        # 6. Build complete layout using SheetBuilder (robust, schema-based)
+        print(f"\n📊 Building side-by-side layout with SheetBuilder...")
+        builder = SheetBuilder(sheet, carrier_names)
         
         # Company header
-        all_rows.append(["Mckinney & Co. Insurance"])
+        builder.add_company_header("Mckinney & Co. Insurance")
         
-        # PROPERTY SECTION
+        # PROPERTY SECTION (using schema for consistent field ordering)
         has_property = any(all_carrier_data[c].get('property') for c in carrier_names if c in all_carrier_data)
         
         if has_property:
-            print(f"  📋 Building Property section...")
-            all_rows.append(["Property Coverages"])
-            all_rows.append(["=" * 20])
-            all_rows.append([])  # Spacing
-            
-            # Property column headers
-            property_header = ["Field Name"]
+            print(f"  📋 Building Property section with schema ordering...")
+            # Reorganize data: Dict[carrier_name][field_name] = field_data
+            property_carrier_data = {}
             for carrier_name in carrier_names:
-                property_header.extend([f"LLM Value ({carrier_name})", f"Source Page ({carrier_name})"])
-            all_rows.append(property_header)
+                if carrier_name in all_carrier_data and all_carrier_data[carrier_name].get('property'):
+                    property_carrier_data[carrier_name] = all_carrier_data[carrier_name]['property']
             
-            # Property data rows
-            property_fields = _get_all_unique_fields(all_carrier_data, carrier_names, 'property')
-            print(f"    Found {len(property_fields)} unique property fields")
-            
-            for field_name in property_fields:
-                row = [field_name]
-                for carrier_name in carrier_names:
-                    property_data = all_carrier_data.get(carrier_name, {}).get('property', {})
-                    if property_data and field_name in property_data:
-                        field_data = property_data[field_name]
-                        row.extend([
-                            field_data.get('llm_value', ''),
-                            field_data.get('source_page', '')
-                        ])
-                    else:
-                        row.extend(['', ''])
-                all_rows.append(row)
-            
-            all_rows.append([])  # Spacing
-            all_rows.append([])
+            builder.add_section("Property Coverages", PROPERTY_FIELDS_SCHEMA, property_carrier_data)
         
-        # LIABILITY SECTION
+        # LIABILITY SECTION (using GL schema for consistent field ordering)
         has_liability = any(all_carrier_data[c].get('liability') for c in carrier_names if c in all_carrier_data)
         
         if has_liability:
-            print(f"  📋 Building Liability section...")
-            all_rows.append(["General Liability Coverages"])
-            all_rows.append(["=" * 20])
-            all_rows.append([])
-            
-            # Liability column headers
-            liability_header = ["Field Name"]
+            print(f"  📋 Building GL section with schema ordering...")
+            # Reorganize data: Dict[carrier_name][field_name] = field_data
+            gl_carrier_data = {}
             for carrier_name in carrier_names:
-                liability_header.extend([f"LLM Value ({carrier_name})", f"Source Page ({carrier_name})"])
-            all_rows.append(liability_header)
+                if carrier_name in all_carrier_data and all_carrier_data[carrier_name].get('liability'):
+                    gl_carrier_data[carrier_name] = all_carrier_data[carrier_name]['liability']
             
-            # Liability data rows
-            liability_fields = _get_all_unique_fields(all_carrier_data, carrier_names, 'liability')
-            print(f"    Found {len(liability_fields)} unique liability fields")
-            
-            for field_name in liability_fields:
-                row = [field_name]
-                for carrier_name in carrier_names:
-                    liability_data = all_carrier_data.get(carrier_name, {}).get('liability', {})
-                    if liability_data and field_name in liability_data:
-                        field_data = liability_data[field_name]
-                        row.extend([
-                            field_data.get('llm_value', ''),
-                            field_data.get('source_page', '')
-                        ])
-                    else:
-                        row.extend(['', ''])
-                all_rows.append(row)
-            
-            all_rows.append([])  # Spacing
-            all_rows.append([])
+            builder.add_section("General Liability Coverages", GL_FIELDS_SCHEMA, gl_carrier_data)
         
-        # LIQUOR SECTION
+        # LIQUOR SECTION (using liquor schema for consistent field ordering)
         has_liquor = any(all_carrier_data[c].get('liquor') for c in carrier_names if c in all_carrier_data)
         
         if has_liquor:
-            print(f"  📋 Building Liquor section...")
-            all_rows.append(["Liquor/Bar Insurance Coverages"])
-            all_rows.append(["=" * 20])
-            all_rows.append([])
-            
-            # Liquor column headers
-            liquor_header = ["Field Name"]
+            print(f"  📋 Building Liquor section with schema ordering...")
+            # Reorganize data: Dict[carrier_name][field_name] = field_data
+            liquor_carrier_data = {}
             for carrier_name in carrier_names:
-                liquor_header.extend([f"LLM Value ({carrier_name})", f"Source Page ({carrier_name})"])
-            all_rows.append(liquor_header)
+                if carrier_name in all_carrier_data and all_carrier_data[carrier_name].get('liquor'):
+                    liquor_carrier_data[carrier_name] = all_carrier_data[carrier_name]['liquor']
             
-            # Liquor data rows
-            liquor_fields = _get_all_unique_fields(all_carrier_data, carrier_names, 'liquor')
-            print(f"    Found {len(liquor_fields)} unique liquor fields")
-            
-            for field_name in liquor_fields:
-                row = [field_name]
-                for carrier_name in carrier_names:
-                    liquor_data = all_carrier_data.get(carrier_name, {}).get('liquor', {})
-                    if liquor_data and field_name in liquor_data:
-                        field_data = liquor_data[field_name]
-                        row.extend([
-                            field_data.get('llm_value', ''),
-                            field_data.get('source_page', '')
-                        ])
-                    else:
-                        row.extend(['', ''])
-                all_rows.append(row)
-            
-            all_rows.append([])  # Spacing
-            all_rows.append([])
+            builder.add_section("Liquor/Bar Insurance Coverages", LIQUOR_FIELDS_SCHEMA, liquor_carrier_data)
         
-        # 7. Push EVERYTHING in ONE batch
-        print(f"\n📤 Pushing {len(all_rows)} rows to Google Sheets...")
-        update_response = sheet.update('A1', all_rows)
-        print(f"✅ Google Sheets update response: {update_response}")
+        # 7. Write all data in ONE batch
+        builder.write_all_data()
         
-        # 8. Apply formatting (headers, colors, etc.)
-        print(f"\n🎨 Applying formatting to headers...")
-        _apply_sheet_formatting(sheet, all_rows, has_property, has_liability, has_liquor)
-        print(f"✅ Formatting applied!")
+        # 8. Apply all formatting in ONE batch
+        builder.apply_all_formatting()
         
         print(f"\n{'='*80}")
         print(f"✅ FINALIZATION COMPLETE!")
         print(f"{'='*80}")
         print(f"✅ Upload ID: {upload_id}")
         print(f"✅ Carriers: {', '.join(carrier_names)}")
-        print(f"✅ Total rows: {len(all_rows)}")
+        print(f"✅ Total rows: {len(builder.all_rows)}")
         print(f"✅ Sheet: {sheet_name}")
         print(f"{'='*80}\n")
         
@@ -701,7 +793,7 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
             "success": True,
             "uploadId": upload_id,
             "carriers": carrier_names,
-            "rows": len(all_rows),
+            "rows": len(builder.all_rows),
             "sheetName": sheet_name,
             "sections": {
                 "property": has_property,

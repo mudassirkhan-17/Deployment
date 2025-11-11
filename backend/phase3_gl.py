@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 from google.cloud import storage
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+from schemas.gl_schema import GL_FIELDS_SCHEMA, get_gl_field_names, get_gl_required_fields
 
 load_dotenv()
 
@@ -310,37 +311,15 @@ def extract_with_llm(chunk: Dict[str, Any], chunk_num: int, total_chunks: int) -
 def merge_extraction_results(all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Merge results from all chunks, prioritizing non-null values"""
     
-    # Define the expected fields for GENERAL LIABILITY INSURANCE
-    expected_fields = [
-        "Each Occurrence/General Aggregate Limits",
-        "Liability Deductible - Per claim or Per Occ basis",
-        "Hired Auto And Non-Owned Auto Liability - Without Delivery Service",
-        "Fuel Contamination coverage limits",
-        "Vandalism coverage",
-        "Garage Keepers Liability",
-        "Employment Practices Liability",
-        "Abuse & Molestation Coverage limits",
-        "Assault & Battery Coverage limits",
-        "Firearms/Active Assailant Coverage limits",
-        "Additional Insured",
-        "Additional Insured (Mortgagee)",
-        "Additional Insured - Jobber",
-        "Exposure",
-        "Rating basis: If Sales - Subject to Audit",
-        "Terrorism",
-        "Personal and Advertising Injury Limit",
-        "Products/Completed Operations Aggregate Limit",
-        "Minimum Earned",
-        "General Liability Premium",
-        "Total Premium (With/Without Terrorism)",
-        "Policy Premium"
-    ]
+    # Use schema to initialize GL fields in correct order
+    # This ensures Google Sheets always has consistent field ordering
+    expected_field_names = get_gl_field_names()  # From GL schema - guaranteed order
     
     merged_result = {}
     
-    # Initialize all expected fields as null
-    for field in expected_fields:
-        merged_result[field] = None
+    # Initialize all expected fields as null (schema order preserved)
+    for field_name in expected_field_names:
+        merged_result[field_name] = None
     
     # Collect all unique fields found by LLM
     all_found_fields = set()
