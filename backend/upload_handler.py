@@ -113,7 +113,8 @@ def process_carrier_uploads(
                 "carrierName": carrier_name,
                 "propertyPDF": None,
                 "liabilityPDF": None,
-                "liquorPDF": None
+                "liquorPDF": None,
+                "workersCompPDF": None
             }
             
             # Upload Property PDF if provided
@@ -158,6 +159,20 @@ def process_carrier_uploads(
                     "uploadedAt": datetime.now().isoformat()
                 }
             
+            # Upload Workers Comp PDF if provided
+            if carrier.get('workersCompPDF'):
+                workerscomp_filename = get_unique_filename(carrier_name, 'workerscomp')
+                workerscomp_path = upload_pdf_to_gcs(
+                    carrier['workersCompPDF'],
+                    workerscomp_filename
+                )
+                carrier_info["workersCompPDF"] = {
+                    "filename": workerscomp_filename,
+                    "path": workerscomp_path,
+                    "size": len(carrier['workersCompPDF']),
+                    "uploadedAt": datetime.now().isoformat()
+                }
+            
             uploaded_carriers.append(carrier_info)
         
         # Update metadata file
@@ -165,7 +180,10 @@ def process_carrier_uploads(
         
         # Count total files uploaded (some may be None)
         total_files = sum(
-            (1 if c.get("propertyPDF") else 0) + (1 if c.get("liabilityPDF") else 0)
+            (1 if c.get("propertyPDF") else 0) + 
+            (1 if c.get("liabilityPDF") else 0) + 
+            (1 if c.get("liquorPDF") else 0) + 
+            (1 if c.get("workersCompPDF") else 0)
             for c in uploaded_carriers
         )
         

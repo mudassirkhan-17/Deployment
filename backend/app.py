@@ -90,9 +90,9 @@ async def upload_quotes(
         if not carriers:
             raise HTTPException(status_code=400, detail="No carriers provided")
         
-        # Files can be 0 to 3 per carrier (property, liability, liquor) - completely optional
+        # Files can be 0 to 4 per carrier (property, liability, liquor, workersComp) - completely optional
         min_files = 0
-        max_files = len(carriers) * 3
+        max_files = len(carriers) * 4
         
         if len(files) < min_files or len(files) > max_files:
             raise HTTPException(
@@ -109,7 +109,8 @@ async def upload_quotes(
                 "carrierName": carrier.get("name", f"Carrier_{len(carriers_data)+1}"),
                 "propertyPDF": None,
                 "liabilityPDF": None,
-                "liquorPDF": None
+                "liquorPDF": None,
+                "workersCompPDF": None
             })
         
         # Get file metadata list
@@ -135,6 +136,8 @@ async def upload_quotes(
                             carriers_data[carrier_index]['liabilityPDF'] = file_content
                         elif file_type == 'liquor':
                             carriers_data[carrier_index]['liquorPDF'] = file_content
+                        elif file_type == 'workersComp':
+                            carriers_data[carrier_index]['workersCompPDF'] = file_content
                 except Exception as e:
                     print(f"Error processing file metadata: {e}")
                     raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")

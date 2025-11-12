@@ -11,6 +11,7 @@ interface CarrierData {
   propertyPDF: { file: File | null; name: string };
   liabilityPDF: { file: File | null; name: string };
   liquorPDF: { file: File | null; name: string };
+  workersCompPDF: { file: File | null; name: string };
 }
 
 interface UploadResponse {
@@ -28,7 +29,7 @@ export default function SummaryPage() {
   const { user, isLoggedIn } = useAuth();
   const router = useRouter();
   const [carriers, setCarriers] = useState<CarrierData[]>([
-    { id: 1, name: '', propertyPDF: { file: null, name: '' }, liabilityPDF: { file: null, name: '' }, liquorPDF: { file: null, name: '' } }
+    { id: 1, name: '', propertyPDF: { file: null, name: '' }, liabilityPDF: { file: null, name: '' }, liquorPDF: { file: null, name: '' }, workersCompPDF: { file: null, name: '' } }
   ]);
   const [nextId, setNextId] = useState(2);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -63,7 +64,8 @@ export default function SummaryPage() {
       name: '',
       propertyPDF: { file: null, name: '' },
       liabilityPDF: { file: null, name: '' },
-      liquorPDF: { file: null, name: '' }
+      liquorPDF: { file: null, name: '' },
+      workersCompPDF: { file: null, name: '' }
     };
     setCarriers([...carriers, newCarrier]);
     setNextId(nextId + 1);
@@ -81,7 +83,7 @@ export default function SummaryPage() {
     setCarriers(carriers.map(c => (c.id === id ? { ...c, name: value } : c)));
   };
 
-  const handleFileUpload = (id: number, type: 'property' | 'liability' | 'liquor', file: File) => {
+  const handleFileUpload = (id: number, type: 'property' | 'liability' | 'liquor' | 'workersComp', file: File) => {
     setCarriers(
       carriers.map(c => {
         if (c.id === id) {
@@ -89,8 +91,10 @@ export default function SummaryPage() {
             return { ...c, propertyPDF: { file, name: file.name } };
           } else if (type === 'liability') {
             return { ...c, liabilityPDF: { file, name: file.name } };
-          } else {
+          } else if (type === 'liquor') {
             return { ...c, liquorPDF: { file, name: file.name } };
+          } else {
+            return { ...c, workersCompPDF: { file, name: file.name } };
           }
         }
         return c;
@@ -111,7 +115,7 @@ export default function SummaryPage() {
 
     // Check if at least one carrier has at least one file
     const hasAnyFiles = carriers.some(
-      c => c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file
+      c => c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file || c.workersCompPDF.file
     );
 
     if (!hasAnyFiles) {
@@ -133,7 +137,8 @@ export default function SummaryPage() {
           name: c.name,
           hasProperty: !!c.propertyPDF.file,
           hasLiability: !!c.liabilityPDF.file,
-          hasLiquor: !!c.liquorPDF.file
+          hasLiquor: !!c.liquorPDF.file,
+          hasWorkersComp: !!c.workersCompPDF.file
         }))
       });
       formData.append('carriers_json', carriersJson);
@@ -159,6 +164,13 @@ export default function SummaryPage() {
           formData.append('file_metadata', JSON.stringify({
             carrierIndex: carrierIdx,
             type: 'liquor'
+          }));
+        }
+        if (carrier.workersCompPDF.file) {
+          formData.append('files', carrier.workersCompPDF.file);
+          formData.append('file_metadata', JSON.stringify({
+            carrierIndex: carrierIdx,
+            type: 'workersComp'
           }));
         }
       });
@@ -339,7 +351,7 @@ export default function SummaryPage() {
                     </div>
 
                     {/* PDF Upload Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       {/* Property PDF */}
                       <div>
                         <label className="block text-white font-medium mb-3">Property PDF</label>
@@ -435,6 +447,38 @@ export default function SummaryPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Workers Comp PDF */}
+                      <div>
+                        <label className="block text-white font-medium mb-3">Workers Comp PDF</label>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                handleFileUpload(carrier.id, 'workersComp', e.target.files[0]);
+                              }
+                            }}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                          <div className="border-2 border-dashed border-white/30 rounded-xl p-8 hover:border-white/50 transition cursor-pointer bg-white/5 hover:bg-white/10">
+                            <div className="text-center">
+                              {carrier.workersCompPDF.file ? (
+                                <>
+                                  <p className="text-green-300 font-medium">✓ {carrier.workersCompPDF.name}</p>
+                                  <p className="text-white/60 text-sm mt-1">{(carrier.workersCompPDF.file.size / 1024).toFixed(2)} KB</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-white/80 font-medium">📄 Click to upload PDF</p>
+                                  <p className="text-white/60 text-sm mt-1">Workers Compensation Quote</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Upload Status */}
@@ -450,6 +494,9 @@ export default function SummaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={carrier.liquorPDF.file ? '✓ text-green-300' : '○ text-white/60'}>Liquor PDF</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={carrier.workersCompPDF.file ? '✓ text-green-300' : '○ text-white/60'}>Workers Comp PDF</span>
                       </div>
                     </div>
                   </div>
@@ -514,7 +561,7 @@ export default function SummaryPage() {
               {uploadResult.carriers.map((carrier, idx) => (
                 <div key={idx} className="bg-white/5 rounded-lg p-6 border border-white/20">
                   <h4 className="text-lg font-semibold text-white mb-4">{carrier.carrierName}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {carrier.propertyPDF ? (
                       <div className="bg-white/5 p-4 rounded">
                         <p className="text-white/80 text-sm font-medium mb-2">Property PDF</p>
@@ -546,6 +593,17 @@ export default function SummaryPage() {
                     ) : (
                       <div className="bg-white/10 p-4 rounded border border-white/20">
                         <p className="text-white/60 text-sm">Liquor PDF - Not uploaded</p>
+                      </div>
+                    )}
+                    {carrier.workersCompPDF ? (
+                      <div className="bg-white/5 p-4 rounded">
+                        <p className="text-white/80 text-sm font-medium mb-2">Workers Comp PDF</p>
+                        <p className="text-white/60 text-xs break-all">{carrier.workersCompPDF.path}</p>
+                        <p className="text-white/50 text-xs mt-2">{(carrier.workersCompPDF.size / 1024).toFixed(2)} KB</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 p-4 rounded border border-white/20">
+                        <p className="text-white/60 text-sm">Workers Comp PDF - Not uploaded</p>
                       </div>
                     )}
                   </div>

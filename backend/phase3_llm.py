@@ -62,13 +62,20 @@ def read_combined_file_from_gcs(bucket: storage.bucket.Bucket, file_path: str) -
         
         # Extract all pages
         all_pages = []
+        # Updated regex to handle both normal format and OCR-only format
+        # Normal: PAGE X (PyMuPDF (Clean)): or PAGE X (OCR (All Pages)):
+        # OCR-only: PAGE X (OCR Only):
         page_sections = re.findall(
-            r'PAGE (\d+) \((PyMuPDF|OCR) \(.*?\)\):.*?TEXT CONTENT:.*?------------------------------\n(.*?)\n={80}',
+            r'PAGE (\d+) \((?:(PyMuPDF|OCR) \(.*?\)|(OCR Only))\):.*?TEXT CONTENT:.*?------------------------------\n(.*?)\n={80}',
             content,
             re.DOTALL
         )
         
-        for page_num, source, page_text in page_sections:
+        for match in page_sections:
+            page_num = match[0]
+            # source can be in match[1] (normal) or match[2] (OCR Only)
+            source = match[1] if match[1] else 'OCR'  # OCR Only becomes OCR
+            page_text = match[3]  # Text is now in the 4th group
             all_pages.append({
                 'page_num': int(page_num),
                 'source': source,
@@ -489,8 +496,8 @@ def _check_if_all_carriers_complete(bucket: storage.bucket.Bucket, upload_id: st
             carrier_name = carrier.get('carrierName', 'Unknown')
             safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
             
-            # Check for property, liability, and liquor final validated fields
-            for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
+            # Check for property, liability, liquor, and workers comp final validated fields
+            for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF', 'workersCompPDF']:
                 pdf_info = carrier.get(file_type)
                 if not pdf_info or not pdf_info.get('path'):
                     continue
@@ -510,7 +517,7 @@ def _check_if_all_carriers_complete(bucket: storage.bucket.Bucket, upload_id: st
                 if blob.exists():
                     completed_count += 1
         
-        # Calculate total expected files (property + liability + liquor for each carrier)
+        # Calculate total expected files (property + liability + liquor + workers comp for each carrier)
         expected_files = 0
         for carrier in carriers:
             if carrier.get('propertyPDF') and carrier.get('propertyPDF').get('path'):
@@ -518,6 +525,8 @@ def _check_if_all_carriers_complete(bucket: storage.bucket.Bucket, upload_id: st
             if carrier.get('liabilityPDF') and carrier.get('liabilityPDF').get('path'):
                 expected_files += 1
             if carrier.get('liquorPDF') and carrier.get('liquorPDF').get('path'):
+                expected_files += 1
+            if carrier.get('workersCompPDF') and carrier.get('workersCompPDF').get('path'):
                 expected_files += 1
         
         print(f"📊 Upload {upload_id}: {completed_count}/{expected_files} files completed")
@@ -554,7 +563,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
     
     # Helper function to process a single PDF file
     def process_single_pdf_file(carrier_name, safe_carrier_name, file_type, pdf_info):
-        """Process one PDF file (property/GL/liquor) - called in parallel"""
+        """Process one PDF file (property/GL/liquor/workersComp) - called in parallel"""
         gs_path = pdf_info.get('path')
         if not gs_path:
             return None
@@ -603,6 +612,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     # Import Liquor-specific extractor for liquor
                     from phase3_liqour import extract_with_llm as extract_with_llm_liquor
                     return extract_with_llm_liquor(chunk, chunk['chunk_num'], len(chunks))
+                elif file_type == 'workersCompPDF':
+                    # Import Workers Comp-specific extractor
+                    from phase3_workers_comp import extract_with_llm as extract_with_llm_wc
+                    return extract_with_llm_wc(chunk, chunk['chunk_num'], len(chunks))
                 else:
                     # Use property extraction for property PDFs
                     return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
@@ -628,6 +641,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 # Import Liquor-specific merge for liquor extraction
                 from phase3_liqour import merge_extraction_results as merge_extraction_results_liquor
                 merged_result = merge_extraction_results_liquor(chunk_results)
+            elif file_type == 'workersCompPDF':
+                # Import Workers Comp-specific merge
+                from phase3_workers_comp import merge_extraction_results as merge_extraction_results_wc
+                merged_result = merge_extraction_results_wc(chunk_results)
             else:
                 # Use property merge for property PDFs
                 merged_result = merge_extraction_results(chunk_results)
@@ -662,7 +679,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
         
         # Collect all PDF files for this carrier
         pdf_tasks = []
-        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF']:
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF', 'workersCompPDF']:
             pdf_info = carrier.get(file_type)
             if pdf_info and pdf_info.get('path'):
                 pdf_tasks.append((carrier_name, safe_carrier_name, file_type, pdf_info))
@@ -804,10 +821,22 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Policy Premium": 42,  # Same as Total Premium
                 }
                 
+                # Workers Comp Field to Row mapping
+                workers_comp_field_rows = {
+                    "Limits": 86,
+                    "FEIN #": 87,
+                    "Payroll - Subject to Audit": 88,
+                    "Excluded Officer": 89,
+                    "If Opting out from Workers Compensation Coverage": 89,  # Same row as Excluded Officer
+                    "Total Premium": 90,
+                    "Workers Compensation Premium": 90,  # Same as Total Premium
+                    "Policy Premium": 90,  # Same as Total Premium
+                }
+                
                 # Columns for each carrier: B (Option 1), C (Option 2), D (Option 3)
                 columns = ['B', 'C', 'D']
                 
-                # STEP 1: Clear old data from all columns (B, C, D) for GL, Property, and Liquor rows
+                # STEP 1: Clear old data from all columns (B, C, D) for GL, Property, Liquor, and Workers Comp rows
                 print("  🧹 Clearing old data from columns B, C, D...")
                 clear_ranges = []
                 # GL rows (8-32)
@@ -819,11 +848,15 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 # Property rows (46-80)
                 for col in columns:
                     clear_ranges.append(f"{col}46:{col}80")
-                # Premium Breakdown rows (91, 92, 94)
+                # Workers Comp rows (86-90)
+                for col in columns:
+                    clear_ranges.append(f"{col}86:{col}90")
+                # Premium Breakdown rows (91, 92, 94, 95)
                 for col in columns:
                     clear_ranges.append(f"{col}91:{col}91")  # GL Premium
                     clear_ranges.append(f"{col}92:{col}92")  # Property Premium
                     clear_ranges.append(f"{col}94:{col}94")  # LL premium
+                    clear_ranges.append(f"{col}95:{col}95")  # WC Premium
                 
                 # Clear all ranges in one batch call
                 if clear_ranges:
@@ -923,6 +956,34 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                 
                                 print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Liquor → Column {column}")
                     
+                    # Process Workers Comp data if exists (SAME carrier, SAME column)
+                    if carrier.get('workersCompPDF'):
+                        pdf_path = carrier['workersCompPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            
+                            # Load Workers Comp data from GCS
+                            wc_file = f"phase3/results/{safe_name}_workerscomp_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(wc_file)
+                            if blob.exists():
+                                wc_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                
+                                # Use the workers comp field rows mapping defined earlier
+                                for field_name, row_num in workers_comp_field_rows.items():
+                                    if field_name in wc_data:
+                                        field_info = wc_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            cell_ref = f"{column}{row_num}"
+                                            updates.append({
+                                                'range': cell_ref,
+                                                'values': [[str(llm_value)]]
+                                            })
+                                
+                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Workers Comp → Column {column}")
+                    
                     # STEP 3: Copy Total Premium values to Premium Breakdown section
                     # GL Total Premium (row 28) → GL Premium (row 91)
                     if carrier.get('liabilityPDF'):
@@ -992,11 +1053,34 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'values': [[str(llm_value)]]
                                             })
                                             break
+                    
+                    # Workers Comp Total Premium (row 90) → WC Premium (row 95)
+                    if carrier.get('workersCompPDF'):
+                        pdf_path = carrier['workersCompPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            wc_file = f"phase3/results/{safe_name}_workerscomp_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(wc_file)
+                            if blob.exists():
+                                wc_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                # Try all possible field name variations
+                                for field_name in ["Total Premium", "Workers Compensation Premium", "Total Premium (With/Without Terrorism)"]:
+                                    if field_name in wc_data:
+                                        field_info = wc_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}95",  # WC Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break
                 
-                # Batch update sheet (GL + Property + Liquor + Premium Breakdown combined)
+                # Batch update sheet (GL + Property + Liquor + Workers Comp + Premium Breakdown combined)
                 if updates:
                     sheet.batch_update(updates)
-                    print(f"✅ Batch updated {len(updates)} fields to sheet (GL + Property + Liquor + Premium Breakdown)")
+                    print(f"✅ Batch updated {len(updates)} fields to sheet (GL + Property + Liquor + Workers Comp + Premium Breakdown)")
                 else:
                     print("⚠️  No values to fill")
             else:
