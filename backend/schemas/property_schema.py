@@ -280,11 +280,11 @@ PROPERTY_FIELDS_SCHEMA = [
         llm_hints=["Property Premium", "Base Premium"]
     ),
     FieldDefinition(
-        name="Total Premium (With/Without Terrorism)",
+        name="Total Property Premium",
         field_type=FieldType.CURRENCY,
         required=True,
         description="Total property premium including endorsements",
-        llm_hints=["Total Premium", "Total Charges", "Premium"]
+        llm_hints=["Total Premium", "Total Charges", "Premium", "Total Premium (With/Without Terrorism)", "Total Property Premium"]
     ),
     FieldDefinition(
         name="Policy Premium",

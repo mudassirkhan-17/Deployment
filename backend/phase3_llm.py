@@ -753,15 +753,96 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Additional Insured - Managers Or Lessors Of Premises": 32,
                 }
                 
+                # Property Field to Row mapping
+                property_field_rows = {
+                    "Construction Type": 46,
+                    "Valuation and Coinsurance": 47,
+                    "Cosmetic Damage": 48,
+                    "Building": 49,
+                    "Pumps": 50,
+                    "Canopy": 51,
+                    "Roof Surfacing": 53,
+                    "Roof Surfacing -Limitation": 54,
+                    "Business Personal Property": 55,
+                    "Business Income": 56,
+                    "Business Income with Extra Expense": 57,
+                    "Equipment Breakdown": 58,
+                    "Outdoor Signs": 59,
+                    "Signs Within 1,000 Feet to Premises": 60,
+                    "Employee Dishonesty": 61,
+                    "Money & Securities": 62,
+                    "Money and Securities (Inside; Outside)": 63,
+                    "Spoilage": 64,
+                    "Theft": 65,
+                    "Theft Sublimit": 66,
+                    "Theft Deductible": 67,
+                    "Windstorm or Hail Deductible": 68,
+                    "Named Storm Deductible": 69,
+                    "Wind and Hail and Named Storm exclusion": 70,
+                    "All Other Perils Deductible": 71,
+                    "Fire Station Alarm": 72,
+                    "Burglar Alarm": 73,
+                    "Loss Payee": 74,
+                    "Forms and Exclusions": 75,
+                    "Requirement: Protective Safeguards": 76,
+                    "Terrorism": 77,
+                    "Subjectivity:": 78,
+                    "Minimum Earned": 79,
+                    "Total Premium (With/Without Terrorism)": 80,
+                }
+                
+                # Liquor Field to Row mapping
+                liquor_field_rows = {
+                    "Each Occurrence/General Aggregate Limits": 36,
+                    "Sales - Subject to Audit": 37,
+                    "Assault & Battery/Firearms/Active Assailant": 38,
+                    "Requirements": 39,
+                    "If any subjectivities in quote please add": 40,
+                    "Minimum Earned": 41,
+                    "Total Premium (With/Without Terrorism)": 42,
+                    "Liquor Premium": 42,  # Same as Total Premium
+                    "Policy Premium": 42,  # Same as Total Premium
+                }
+                
                 # Columns for each carrier: B (Option 1), C (Option 2), D (Option 3)
                 columns = ['B', 'C', 'D']
                 
-                # Load GL data from ALL carriers and fill side-by-side
+                # STEP 1: Clear old data from all columns (B, C, D) for GL, Property, and Liquor rows
+                print("  🧹 Clearing old data from columns B, C, D...")
+                clear_ranges = []
+                # GL rows (8-32)
+                for col in columns:
+                    clear_ranges.append(f"{col}8:{col}32")
+                # Liquor rows (36-42)
+                for col in columns:
+                    clear_ranges.append(f"{col}36:{col}42")
+                # Property rows (46-80)
+                for col in columns:
+                    clear_ranges.append(f"{col}46:{col}80")
+                # Premium Breakdown rows (91, 92, 94)
+                for col in columns:
+                    clear_ranges.append(f"{col}91:{col}91")  # GL Premium
+                    clear_ranges.append(f"{col}92:{col}92")  # Property Premium
+                    clear_ranges.append(f"{col}94:{col}94")  # LL premium
+                
+                # Clear all ranges in one batch call
+                if clear_ranges:
+                    sheet.batch_clear(clear_ranges)
+                print("  ✅ Cleared old data from columns B, C, D")
+                
+                # STEP 2: Assign one column per carrier (for ALL their file types)
                 updates = []
-                carrier_index = 0
-                for carrier in record.get('carriers', []):
-                    if carrier.get('liabilityPDF') and carrier_index < 3:  # Max 3 carriers
-                        carrier_name = carrier.get('carrierName', 'Unknown')
+                
+                # Loop through each carrier ONCE and get their column
+                for carrier_index, carrier in enumerate(record.get('carriers', [])):
+                    if carrier_index >= 3:  # Max 3 carriers
+                        break
+                    
+                    carrier_name = carrier.get('carrierName', 'Unknown')
+                    column = columns[carrier_index]  # This carrier's column (B, C, or D)
+                    
+                    # Process GL data if exists
+                    if carrier.get('liabilityPDF'):
                         pdf_path = carrier['liabilityPDF']['path']
                         timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
                         if timestamp_match:
@@ -773,7 +854,6 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                             blob = bucket.blob(gl_file)
                             if blob.exists():
                                 gl_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                column = columns[carrier_index]  # B, C, or D
                                 
                                 for field_name, row_num in gl_field_rows.items():
                                     if field_name in gl_data:
@@ -786,15 +866,139 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'values': [[str(llm_value)]]
                                             })
                                 
-                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) → Column {column}")
-                                carrier_index += 1
+                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) GL → Column {column}")
+                    
+                    # Process Property data if exists (SAME carrier, SAME column)
+                    if carrier.get('propertyPDF'):
+                        pdf_path = carrier['propertyPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            
+                            # Load Property data from GCS
+                            property_file = f"phase3/results/{safe_name}_property_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(property_file)
+                            if blob.exists():
+                                property_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                
+                                for field_name, row_num in property_field_rows.items():
+                                    if field_name in property_data:
+                                        field_info = property_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            cell_ref = f"{column}{row_num}"
+                                            updates.append({
+                                                'range': cell_ref,
+                                                'values': [[str(llm_value)]]
+                                            })
+                                
+                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Property → Column {column}")
+                    
+                    # Process Liquor data if exists (SAME carrier, SAME column)
+                    if carrier.get('liquorPDF'):
+                        pdf_path = carrier['liquorPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            
+                            # Load Liquor data from GCS
+                            liquor_file = f"phase3/results/{safe_name}_liquor_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(liquor_file)
+                            if blob.exists():
+                                liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                
+                                # Use the liquor field rows mapping defined earlier
+                                for field_name, row_num in liquor_field_rows.items():
+                                    if field_name in liquor_data:
+                                        field_info = liquor_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            cell_ref = f"{column}{row_num}"
+                                            updates.append({
+                                                'range': cell_ref,
+                                                'values': [[str(llm_value)]]
+                                            })
+                                
+                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Liquor → Column {column}")
+                    
+                    # STEP 3: Copy Total Premium values to Premium Breakdown section
+                    # GL Total Premium (row 28) → GL Premium (row 91)
+                    if carrier.get('liabilityPDF'):
+                        pdf_path = carrier['liabilityPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            gl_file = f"phase3/results/{safe_name}_liability_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(gl_file)
+                            if blob.exists():
+                                gl_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                # Try all possible field name variations
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
+                                    if field_name in gl_data:
+                                        field_info = gl_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}91",  # GL Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break
+                    
+                    # Property Total Premium (row 80) → Property Premium (row 92)
+                    if carrier.get('propertyPDF'):
+                        pdf_path = carrier['propertyPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            property_file = f"phase3/results/{safe_name}_property_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(property_file)
+                            if blob.exists():
+                                property_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                # Try all possible field name variations
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
+                                    if field_name in property_data:
+                                        field_info = property_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}92",  # Property Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break
+                    
+                    # Liquor Total Premium (row 42) → LL premium (row 94)
+                    if carrier.get('liquorPDF'):
+                        pdf_path = carrier['liquorPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            liquor_file = f"phase3/results/{safe_name}_liquor_final_validated_fields_{timestamp}.json"
+                            blob = bucket.blob(liquor_file)
+                            if blob.exists():
+                                liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
+                                # Try all possible field name variations
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Total Premium Liquor (With/Without Terrorism)"]:
+                                    if field_name in liquor_data:
+                                        field_info = liquor_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}94",  # LL premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break
                 
-                # Batch update sheet
+                # Batch update sheet (GL + Property + Liquor + Premium Breakdown combined)
                 if updates:
                     sheet.batch_update(updates)
-                    print(f"✅ Batch updated {len(updates)} GL fields to sheet")
+                    print(f"✅ Batch updated {len(updates)} fields to sheet (GL + Property + Liquor + Premium Breakdown)")
                 else:
-                    print("⚠️  No GL values to fill")
+                    print("⚠️  No values to fill")
             else:
                 print("⚠️  Credentials not found")
         except Exception as e:

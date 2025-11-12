@@ -224,7 +224,7 @@ def extract_with_nanonets_ocr(pdf_bytes: bytes, page_num: int) -> Dict[str, Any]
         # This avoids Windows file locking issues during OCR processing
 
 
-def process_all_pages_with_ocr(pdf_bytes: bytes, total_pages: int, n_jobs: int = 2) -> Dict[str, Any]:
+def process_all_pages_with_ocr(pdf_bytes: bytes, total_pages: int, n_jobs: int = -1) -> Dict[str, Any]:
     """
     Process ALL pages with OCR - PARALLELIZED with Joblib
     

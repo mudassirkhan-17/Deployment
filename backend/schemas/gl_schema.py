@@ -150,11 +150,11 @@ GL_FIELDS_SCHEMA = [
         llm_hints=["GL Premium", "Liability Premium"]
     ),
     FieldDefinition(
-        name="Total Premium (With/Without Terrorism)",
+        name="Total GL Premium",
         field_type=FieldType.CURRENCY,
         required=True,
         description="Total GL premium including endorsements",
-        llm_hints=["Total Premium", "Total Charges"]
+        llm_hints=["Total Premium", "Total Charges", "Total Premium (With/Without Terrorism)", "Total GL Premium", "Grand Total"]
     ),
     FieldDefinition(
         name="Policy Premium",
