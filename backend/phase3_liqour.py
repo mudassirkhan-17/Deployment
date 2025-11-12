@@ -549,23 +549,10 @@ def process_upload_llm_extraction_liquor(upload_id: str) -> Dict[str, Any]:
     print("🔍 Checking if all carriers are complete...")
     
     if _check_if_all_carriers_complete_liquor(bucket, upload_id):
-        print("🎉 ALL LIQUOR CARRIERS COMPLETE! Auto-triggering Google Sheets finalization...")
-        try:
-            from phase5_googlesheet import finalize_upload_to_sheets
-            sheets_result = finalize_upload_to_sheets(upload_id)
-            if sheets_result.get('success'):
-                print("✅ Google Sheets finalization complete!")
-                result['sheets_push'] = sheets_result
-            else:
-                print(f"⚠️  Google Sheets finalization had issues: {sheets_result.get('error')}")
-                result['sheets_push_error'] = sheets_result.get('error')
-        except Exception as e:
-            print(f"❌ Google Sheets finalization failed: {e}")
-            import traceback
-            traceback.print_exc()
-            result['sheets_push_error'] = str(e)
+        print("🎉 ALL LIQUOR CARRIERS COMPLETE!")
+        print("💡 Auto-trigger disabled. Manual sheet mapping will be implemented.")
+        # Auto-trigger disabled - user will implement manual mapping
     else:
         print("⏳ Other Liquor carriers still processing. Waiting for all to complete...")
-        print("💡 Or manually run: /finalize-upload/{uploadId}")
     
     return result

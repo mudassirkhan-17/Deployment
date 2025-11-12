@@ -40,6 +40,14 @@ def _download_text_from_gcs(bucket: storage.bucket.Bucket, blob_path: str) -> st
     return blob.download_as_string().decode('utf-8')
 
 
+def _download_json_from_gcs(bucket: storage.bucket.Bucket, blob_path: str) -> Dict[str, Any]:
+    """Download JSON file from GCS"""
+    blob = bucket.blob(blob_path)
+    if not blob.exists():
+        return {}
+    return json.loads(blob.download_as_string().decode('utf-8'))
+
+
 def _upload_json_to_gcs(bucket: storage.bucket.Bucket, blob_path: str, data: Dict[str, Any]) -> None:
     """Upload JSON file to GCS"""
     blob = bucket.blob(blob_path)
@@ -540,7 +548,7 @@ def process_upload_llm_extraction_gl(upload_id: str) -> Dict[str, Any]:
             
             # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
             chunk_results = Parallel(
-                n_jobs=2,
+                n_jobs=-1,
                 backend='threading',
                 verbose=5
             )(
@@ -582,23 +590,106 @@ def process_upload_llm_extraction_gl(upload_id: str) -> Dict[str, Any]:
     print("🔍 Checking if all carriers are complete...")
     
     if _check_if_all_carriers_complete_gl(bucket, upload_id):
-        print("🎉 ALL GL CARRIERS COMPLETE! Auto-triggering Google Sheets finalization...")
+        print("🎉 ALL GL CARRIERS COMPLETE! Auto-filling sheet...")
         try:
-            from phase5_googlesheet import finalize_upload_to_sheets
-            sheets_result = finalize_upload_to_sheets(upload_id)
-            if sheets_result.get('success'):
-                print("✅ Google Sheets finalization complete!")
-                result['sheets_push'] = sheets_result
+            import gspread
+            from google.oauth2.service_account import Credentials
+            from pathlib import Path
+            
+            # Get credentials
+            possible_paths = [
+                'credentials/insurance-sheets-474717-7fc3fd9736bc.json',
+                '../credentials/insurance-sheets-474717-7fc3fd9736bc.json',
+            ]
+            creds_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    creds_path = str(Path(path).resolve())
+                    break
+            
+            if creds_path:
+                scope = [
+                    'https://www.googleapis.com/auth/spreadsheets',
+                    'https://www.googleapis.com/auth/drive'
+                ]
+                creds = Credentials.from_service_account_file(creds_path, scopes=scope)
+                client = gspread.authorize(creds)
+                sheet = client.open("Insurance Fields Data").sheet1
+                
+                # Field to Cell mapping for GL
+                field_mapping = {
+                    "Each Occurrence/General Aggregate Limits": "B8",
+                    "Liability Deductible - Per claim or Per Occ basis": "B9",
+                    "Hired Auto And Non-Owned Auto Liability - Without Delivery Service": "B10",
+                    "Fuel Contamination coverage limits": "B11",
+                    "Vandalism coverage": "B12",
+                    "Garage Keepers Liability": "B13",
+                    "Employment Practices Liability": "B14",
+                    "Abuse & Molestation Coverage limits": "B15",
+                    "Assault & Battery Coverage limits": "B16",
+                    "Firearms/Active Assailant Coverage limits": "B17",
+                    "Additional Insured": "B18",
+                    "Additional Insured (Mortgagee)": "B19",
+                    "Additional insured - Jobber": "B20",
+                    "Exposure": "B21",
+                    "Rating basis: If Sales - Subject to Audit": "B22",
+                    "Terrorism": "B23",
+                    "Personal and Advertising Injury Limit": "B24",
+                    "Products/Completed Operations Aggregate Limit": "B25",
+                    "Minimum Earned": "B26",
+                    "General Liability Premium": "B27",
+                    "Total Premium (With/Without Terrorism)": "B28",
+                    "Policy Premium": "B29",
+                    "Contaminated fuel": "B30",
+                    "Liquor Liability": "B31",
+                    "Additional Insured - Managers Or Lessors Of Premises": "B32",
+                }
+                
+                # Load GL extracted data from GCS
+                carriers = record.get('carriers', [])
+                for carrier in carriers:
+                    if carrier.get('liabilityPDF'):
+                        carrier_name = carrier.get('carrierName', 'Unknown')
+                        pdf_path = carrier['liabilityPDF']['path']
+                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                        if timestamp_match:
+                            timestamp = timestamp_match.group(1)
+                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            
+                            # Load GL data from GCS
+                            gl_file = f"phase3/results/{safe_name}_liability_final_validated_fields_{timestamp}.json"
+                            gl_data = _download_json_from_gcs(bucket, gl_file)
+                            
+                            if gl_data:
+                                # Build batch update from extracted data
+                                updates = []
+                                for field_name, cell_ref in field_mapping.items():
+                                    if field_name in gl_data:
+                                        field_info = gl_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': cell_ref,
+                                                'values': [[str(llm_value)]]
+                                            })
+                                
+                                # Single batch update - only values, no formatting
+                                if updates:
+                                    sheet.batch_update(updates)
+                                    print(f"✅ Batch updated {len(updates)} GL fields to sheet")
+                                    result['sheets_push'] = {"success": True, "fields_filled": len(updates)}
+                                else:
+                                    print("⚠️  No GL values to fill")
+                            else:
+                                print(f"⚠️  No GL data found at {gl_file}")
+                        break
             else:
-                print(f"⚠️  Google Sheets finalization had issues: {sheets_result.get('error')}")
-                result['sheets_push_error'] = sheets_result.get('error')
+                print("⚠️  Credentials not found")
         except Exception as e:
-            print(f"❌ Google Sheets finalization failed: {e}")
+            print(f"❌ Sheet fill failed: {e}")
             import traceback
             traceback.print_exc()
-            result['sheets_push_error'] = str(e)
     else:
         print("⏳ Other GL carriers still processing. Waiting for all to complete...")
-        print("💡 Or manually run: /finalize-upload/{uploadId}")
     
     return result
