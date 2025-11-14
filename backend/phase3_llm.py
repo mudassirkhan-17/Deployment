@@ -623,7 +623,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
             # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
             # backend='threading' is perfect for I/O-bound LLM API calls
             chunk_results = Parallel(
-                n_jobs=2,
+                n_jobs=-1,
                 backend='threading',
                 verbose=5
             )(
@@ -659,7 +659,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 'totalFields': len([k for k in merged_result.keys() if not k.startswith('_')]),
                 'fieldsFound': len([k for k, v in merged_result.items() if v is not None and not k.startswith('_')])
             }
-            
+        
         except Exception as e:
             print(f"❌ Error processing {carrier_name} {file_type}: {e}")
             return {
@@ -851,12 +851,9 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 # Workers Comp rows (86-90)
                 for col in columns:
                     clear_ranges.append(f"{col}86:{col}90")
-                # Premium Breakdown rows (91, 92, 94, 95)
+                # Premium Breakdown rows (91-97) - clear entire section
                 for col in columns:
-                    clear_ranges.append(f"{col}91:{col}91")  # GL Premium
-                    clear_ranges.append(f"{col}92:{col}92")  # Property Premium
-                    clear_ranges.append(f"{col}94:{col}94")  # LL premium
-                    clear_ranges.append(f"{col}95:{col}95")  # WC Premium
+                    clear_ranges.append(f"{col}91:{col}97")  # Premium Breakdown section (GL, Property, Umbrella, LL, WC, Total Policy Premium)
                 
                 # Clear all ranges in one batch call
                 if clear_ranges:
@@ -888,7 +885,12 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                             if blob.exists():
                                 gl_data = json.loads(blob.download_as_string().decode('utf-8'))
                                 
+                                # For row 28 (Total Premium), use priority logic to match row 91
                                 for field_name, row_num in gl_field_rows.items():
+                                    # Special handling for row 28 - use priority like row 91
+                                    if row_num == 28:
+                                        continue  # Handle row 28 separately below
+                                    
                                     if field_name in gl_data:
                                         field_info = gl_data[field_name]
                                         llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
@@ -898,6 +900,18 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'range': cell_ref,
                                                 'values': [[str(llm_value)]]
                                             })
+                                
+                                # Handle row 28 (Total Premium) with priority logic to match row 91
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
+                                    if field_name in gl_data:
+                                        field_info = gl_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}28",  # Total Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break  # Stop at first match, same as row 91
                                 
                                 print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) GL → Column {column}")
                     
@@ -915,7 +929,12 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                             if blob.exists():
                                 property_data = json.loads(blob.download_as_string().decode('utf-8'))
                                 
+                                # For row 80 (Total Premium), use priority logic to match row 92
                                 for field_name, row_num in property_field_rows.items():
+                                    # Special handling for row 80 - use priority like row 92
+                                    if row_num == 80:
+                                        continue  # Handle row 80 separately below
+                                    
                                     if field_name in property_data:
                                         field_info = property_data[field_name]
                                         llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
@@ -925,6 +944,18 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'range': cell_ref,
                                                 'values': [[str(llm_value)]]
                                             })
+                                
+                                # Handle row 80 (Total Premium) with priority logic to match row 92
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
+                                    if field_name in property_data:
+                                        field_info = property_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}80",  # Total Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break  # Stop at first match, same as row 92
                                 
                                 print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Property → Column {column}")
                     
@@ -943,7 +974,12 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                 liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
                                 
                                 # Use the liquor field rows mapping defined earlier
+                                # For row 42 (Total Premium), use priority logic to match row 94
                                 for field_name, row_num in liquor_field_rows.items():
+                                    # Special handling for row 42 - use priority like row 94
+                                    if row_num == 42:
+                                        continue  # Handle row 42 separately below
+                                    
                                     if field_name in liquor_data:
                                         field_info = liquor_data[field_name]
                                         llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
@@ -953,6 +989,18 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'range': cell_ref,
                                                 'values': [[str(llm_value)]]
                                             })
+                                
+                                # Handle row 42 (Total Premium) with priority logic to match row 94
+                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Liquor Premium", "Policy Premium", "Total Premium Liquor (With/Without Terrorism)"]:
+                                    if field_name in liquor_data:
+                                        field_info = liquor_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}42",  # Total Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break  # Stop at first match, same as row 94
                                 
                                 print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Liquor → Column {column}")
                     
@@ -971,7 +1019,17 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                 wc_data = json.loads(blob.download_as_string().decode('utf-8'))
                                 
                                 # Use the workers comp field rows mapping defined earlier
+                                # Skip "Excluded Officer" fields - leave row 89 empty
+                                fields_to_skip = ["Excluded Officer", "If Opting out from Workers Compensation Coverage"]
+                                # For row 90 (Total Premium), use priority logic to match row 96
                                 for field_name, row_num in workers_comp_field_rows.items():
+                                    if field_name in fields_to_skip:
+                                        continue  # Skip these fields, leave row 89 empty
+                                    
+                                    # Special handling for row 90 - use priority like row 96
+                                    if row_num == 90:
+                                        continue  # Handle row 90 separately below
+                                    
                                     if field_name in wc_data:
                                         field_info = wc_data[field_name]
                                         llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
@@ -981,6 +1039,19 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                                 'range': cell_ref,
                                                 'values': [[str(llm_value)]]
                                             })
+                                
+                                # Handle row 90 (Total Premium) with priority logic to match row 96
+                                # Use EXACT same priority list as row 96 to ensure consistency
+                                for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
+                                    if field_name in wc_data:
+                                        field_info = wc_data[field_name]
+                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                        if llm_value:
+                                            updates.append({
+                                                'range': f"{column}90",  # Total Premium row
+                                                'values': [[str(llm_value)]]
+                                            })
+                                            break  # Stop at first match, same as row 96
                                 
                                 print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Workers Comp → Column {column}")
                     
@@ -1054,7 +1125,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                                             })
                                             break
                     
-                    # Workers Comp Total Premium (row 90) → WC Premium (row 95)
+                    # Workers Comp Total Premium (row 90) → WC Premium (row 96)
                     if carrier.get('workersCompPDF'):
                         pdf_path = carrier['workersCompPDF']['path']
                         timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
@@ -1065,14 +1136,15 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                             blob = bucket.blob(wc_file)
                             if blob.exists():
                                 wc_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                # Try all possible field name variations
-                                for field_name in ["Total Premium", "Workers Compensation Premium", "Total Premium (With/Without Terrorism)"]:
+                                # Use the SAME field lookup priority as row 90 to ensure consistency
+                                # Row 90 uses: "Total Premium", "Workers Compensation Premium", "Policy Premium"
+                                for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
                                     if field_name in wc_data:
                                         field_info = wc_data[field_name]
                                         llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
                                         if llm_value:
                                             updates.append({
-                                                'range': f"{column}95",  # WC Premium row
+                                                'range': f"{column}96",  # WC Premium row
                                                 'values': [[str(llm_value)]]
                                             })
                                             break
