@@ -623,7 +623,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
             # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
             # backend='threading' is perfect for I/O-bound LLM API calls
             chunk_results = Parallel(
-                n_jobs=-1,
+                n_jobs=2,
                 backend='threading',
                 verbose=5
             )(
