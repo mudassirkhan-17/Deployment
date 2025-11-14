@@ -53,7 +53,7 @@ services:
   celery_worker:
     build: .
     container_name: insurance-celery
-    command: celery -A tasks worker --loglevel=info --concurrency=2
+    command: celery -A tasks worker --loglevel=info --concurrency=1
     environment:
       - REDIS_URL=redis://redis:6379/0
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/insurance-sheets-474717-7fc3fd9736bc.json

@@ -540,13 +540,13 @@ export default function SummaryPage() {
                   <div className="text-center">
                     <p className="text-white/60 text-sm mb-1">Complete Carriers</p>
                     <p className="text-3xl font-bold text-green-300">
-                      {carriers.filter(c => c.name.trim() && (c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file)).length}
+                      {carriers.filter(c => c.name.trim() && (c.propertyPDF.file || c.liabilityPDF.file || c.liquorPDF.file || c.workersCompPDF.file)).length}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-white/60 text-sm mb-1">Total Files Uploaded</p>
                     <p className="text-3xl font-bold text-white">
-                      {carriers.reduce((acc, c) => acc + (c.propertyPDF.file ? 1 : 0) + (c.liabilityPDF.file ? 1 : 0) + (c.liquorPDF.file ? 1 : 0), 0)}
+                      {carriers.reduce((acc, c) => acc + (c.propertyPDF.file ? 1 : 0) + (c.liabilityPDF.file ? 1 : 0) + (c.liquorPDF.file ? 1 : 0) + (c.workersCompPDF.file ? 1 : 0), 0)}
                     </p>
                   </div>
                 </div>

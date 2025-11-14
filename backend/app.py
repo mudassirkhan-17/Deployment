@@ -213,17 +213,23 @@ def process_phase1(uploadId: str):
 @app.get("/phase1/quality-analysis")
 def analyze_quality(uploadId: str):
     """
-    Analyze PDF quality using PyMuPDF - extracts text and classifies pages
-    as CLEAN, PROBLEM, or BORDERLINE based on quality metrics.
-    Automatically triggers Phase 2 OCR after completion.
+    Queue Phase 1 quality analysis task.
+    Files are already uploaded to GCS - this just queues the processing.
+    Returns immediately so users don't wait.
+    Processing happens in background queue (one at a time).
     """
     try:
-        result = process_upload_quality_analysis(uploadId)
-        if not result.get("success"):
-            raise HTTPException(status_code=404, detail=result.get("error", "Unknown error"))
-        return result
-    except HTTPException:
-        raise
+        from tasks import process_phase1_task
+        # Queue the task - files are already in GCS from upload step
+        task = process_phase1_task.delay(uploadId)
+        print(f"✅ Phase 1 queued for upload: {uploadId}, Task ID: {task.id}")
+        return {
+            "success": True,
+            "message": f"Processing queued. Your upload will be processed shortly.",
+            "uploadId": uploadId,
+            "taskId": task.id,
+            "status": "queued"
+        }
     except Exception as e:
         print(f"ERROR in analyze_quality: {e}")
         import traceback
