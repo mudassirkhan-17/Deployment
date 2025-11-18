@@ -55,33 +55,12 @@ export default function DashboardPage() {
             <p className="text-white/60 text-sm mt-2">User ID: {user.user_id}</p>
           </div>
 
-          {/* Dashboard Content */}
+          {/* Dashboard Content - Reordered per requirements */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Feature Card 1 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Mckinney & Co Insurance Information</h3>
-              <p className="text-white/70">
-                Get the latest information about Mckinney & Co Insurance.
-              </p>
-            </div>
-
-            {/* Feature Card 2 - Summary Generation */}
-            <Link href="/summary">
-              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
-                <h3 className="text-xl font-semibold text-white mb-3">📝 Generate Summary</h3>
-                <p className="text-white/70">
-                  Upload insurance documents and get AI-powered summaries with key information extraction.
-                </p>
-                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
-                  <span>Click to start →</span>
-                </div>
-              </div>
-            </Link>
-
-            {/* Feature Card 3 - Convenience Store Application */}
+            {/* Card 1: Convenience Store E-FORM (Agent Application Form) - CLICKABLE */}
             <Link href="/cstore">
               <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
-                <h3 className="text-xl font-semibold text-white mb-3">🏪 Convenience Store E-FORM ( Agent Application Form ) </h3>
+                <h3 className="text-xl font-semibold text-white mb-3">🏪 Convenience Store E-FORM ( Agent Application Form )</h3>
                 <p className="text-white/70">
                   Complete insurance application form with automated data prefill from property databases.
                 </p>
@@ -91,7 +70,7 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Feature Card 4 - Client Form Application */}
+            {/* Card 2: Convenience Store E-FORM (Client Application Form) - CLICKABLE */}
             <Link href="/client-form">
               <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
                 <h3 className="text-xl font-semibold text-white mb-3">📋 Convenience Store E-FORM ( Client Application Form )</h3>
@@ -104,37 +83,48 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Feature Card 5 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Data Enrichment</h3>
-              <p className="text-white/70">
-                Manage your claims and track the status of your claims.
-              </p>
-            </div>
+            {/* Card 3: Cover Sheet - CLICKABLE (External Link) */}
+            <a 
+              href="https://carrier-submission-tracker-system-for-insurance-production.up.railway.app/login" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
+                <h3 className="text-xl font-semibold text-white mb-3">📄 Cover Sheet</h3>
+                <p className="text-white/70">
+                  Get help and support for your insurance document analysis.
+                </p>
+                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
+                  <span>Click to start →</span>
+                </div>
+              </div>
+            </a>
 
-            {/* Feature Card 4 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Ezlynx Automation</h3>
-              <p className="text-white/70">
-                Integrate with our API for automated document processing.
-              </p>
-            </div>
+            {/* Card 4: Generate Summary - CLICKABLE */}
+            <Link href="/summary">
+              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
+                <h3 className="text-xl font-semibold text-white mb-3">📝 Generate Summary</h3>
+                <p className="text-white/70">
+                  Upload insurance documents and get AI-powered summaries with key information extraction.
+                </p>
+                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
+                  <span>Click to start →</span>
+                </div>
+              </div>
+            </Link>
 
-            {/* Feature Card 5 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Quality Control / Comparision sheet</h3>
-              <p className="text-white/70">
-                Manage your account settings and preferences.
-              </p>
-            </div>
-
-            {/* Feature Card 6 */}
-            <div className="bg-white/5 border border-white/20 rounded-lg p-6 hover:bg-white/10 transition">
-              <h3 className="text-xl font-semibold text-white mb-3">Cover Sheet</h3>
-              <p className="text-white/70">
-                Get help and support for your insurance document analysis.
-              </p>
-            </div>
+            {/* Card 5: Quality Control / Comparison sheet - CLICKABLE */}
+            <Link href="/quality-control">
+              <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
+                <h3 className="text-xl font-semibold text-white mb-3">✅ Quality Control / Comparison sheet</h3>
+                <p className="text-white/70">
+                  Manage your account settings and preferences.
+                </p>
+                <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
+                  <span>Click to start →</span>
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
       </main>
