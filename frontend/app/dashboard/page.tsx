@@ -6,14 +6,15 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { user, isLoggedIn, logout } = useAuth();
+  const { user, isLoggedIn, loading, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    // Wait for auth to load before redirecting
+    if (!loading && !isLoggedIn) {
       router.push('/login');
     }
-  }, [isLoggedIn, router]);
+  }, [isLoggedIn, loading, router]);
 
   const handleLogout = () => {
     logout();

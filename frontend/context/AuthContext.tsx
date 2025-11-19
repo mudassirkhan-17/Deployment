@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as true while checking session
 
   // Load user from sessionStorage on mount (per-tab isolation)
   useEffect(() => {
@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Failed to parse stored user:', error);
       }
     }
+    setLoading(false); // Done checking session
   }, []);
 
   const getApiUrl = () => {
