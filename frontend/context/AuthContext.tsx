@@ -22,9 +22,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Load user from localStorage on mount
+  // Load user from sessionStorage on mount (per-tab isolation)
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = sessionStorage.getItem('user');
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(userData);
       setIsLoggedIn(true);
-      localStorage.setItem('user', JSON.stringify(userData));
+      sessionStorage.setItem('user', JSON.stringify(userData));
     } catch (error: any) {
       throw new Error(error.message || 'Login failed');
     } finally {
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(userData);
       setIsLoggedIn(true);
-      localStorage.setItem('user', JSON.stringify(userData));
+      sessionStorage.setItem('user', JSON.stringify(userData));
     } catch (error: any) {
       throw new Error(error.message || 'Registration failed');
     } finally {
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setIsLoggedIn(false);
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
   };
 
   return (
