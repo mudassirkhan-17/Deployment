@@ -81,7 +81,7 @@ def save_metadata(metadata: Dict[str, Any]) -> None:
 
 def process_carrier_uploads(
     carriers_data: List[Dict[str, Any]],
-    user_id: str
+    username: str
 ) -> Dict[str, Any]:
     """
     Process multiple carriers and upload their PDFs
@@ -95,7 +95,7 @@ def process_carrier_uploads(
             - liabilityFilename: str
             - liquorPDF: bytes (file content)
             - liquorFilename: str
-        user_id: User ID for tracking
+        username: Username for tracking and sheet routing
     
     Returns:
         Success response with all file paths and metadata
@@ -189,7 +189,7 @@ def process_carrier_uploads(
         
         upload_record = {
             "uploadId": upload_id,
-            "userId": user_id,
+            "username": username,
             "uploadedAt": datetime.now().isoformat(),
             "totalCarriers": len(uploaded_carriers),
             "totalFiles": total_files,

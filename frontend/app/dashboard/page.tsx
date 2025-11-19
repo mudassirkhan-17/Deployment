@@ -50,9 +50,8 @@ export default function DashboardPage() {
           <div className="mb-8">
             <h2 className="text-4xl font-bold text-white mb-2">Welcome!</h2>
             <p className="text-white/80 text-lg">
-              Logged in as: <span className="font-semibold text-white">{user.email}</span>
+              Logged in as: <span className="font-semibold text-white">{user.username}</span>
             </p>
-            <p className="text-white/60 text-sm mt-2">User ID: {user.user_id}</p>
           </div>
 
           {/* Dashboard Content - Reordered per requirements */}

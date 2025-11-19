@@ -700,29 +700,44 @@ def finalize_upload_to_sheets(upload_id: str, sheet_name: str = "Insurance Field
         client = gspread.authorize(creds)
         print("✅ Connected to Google Sheets!")
         
-        # 4. Open/create sheet
+        # Get username from metadata for user-specific tab
+        username = upload_record.get('username', 'default')
+        print(f"📋 Using user-specific sheet tab: '{username}'")
+        
+        # 4. Open spreadsheet and select user-specific tab
         sheet = None
         try:
-            print(f"🔍 Looking for sheet: {sheet_name}")
-            sheet = client.open(sheet_name).sheet1
-            print(f"✅ Opened existing sheet: {sheet_name}")
+            print(f"🔍 Looking for spreadsheet: {sheet_name}")
+            spreadsheet = client.open(sheet_name)
+            print(f"✅ Opened existing spreadsheet: {sheet_name}")
+            
+            # Try to open user-specific tab
+            try:
+                sheet = spreadsheet.worksheet(username)
+                print(f"✅ Opened user tab: {username}")
+            except gspread.exceptions.WorksheetNotFound:
+                print(f"⚠️  User tab '{username}' not found. Falling back to MAIN SHEET")
+                sheet = spreadsheet.sheet1
+                
         except gspread.exceptions.SpreadsheetNotFound:
-            print(f"⚠️  Sheet not found, trying alternative approach...")
+            print(f"⚠️  Spreadsheet not found, trying alternative approach...")
             spreadsheets = client.openall()
             for ss in spreadsheets:
                 if sheet_name.lower() in ss.title.lower():
-                    sheet = ss.sheet1
-                    print(f"✅ Found matching sheet: {ss.title}")
+                    spreadsheet = ss
+                    print(f"✅ Found matching spreadsheet: {ss.title}")
+                    
+                    # Try to open user-specific tab
+                    try:
+                        sheet = spreadsheet.worksheet(username)
+                        print(f"✅ Opened user tab: {username}")
+                    except gspread.exceptions.WorksheetNotFound:
+                        print(f"⚠️  User tab '{username}' not found. Falling back to MAIN SHEET")
+                        sheet = spreadsheet.sheet1
                     break
-            
-            if not sheet:
-                print(f"📝 Creating new sheet: {sheet_name}")
-                spreadsheet = client.create(sheet_name)
-                sheet = spreadsheet.sheet1
-                print(f"✅ Created new sheet: {sheet_name}")
         
         if not sheet:
-            raise Exception(f"Could not open or create sheet '{sheet_name}'")
+            raise Exception(f"Could not open sheet or find tab '{username}' in '{sheet_name}'")
         
         # 5. Clear sheet ONCE
         sheet.clear()

@@ -40,17 +40,17 @@ def read_root():
     return {"message": "Hello, World! Insurance PDF Analysis API"}
 
 @app.post("/register/")
-def register_endpoint(email: str = Form(...), password: str = Form(...)):
-    """Register new user"""
-    result = register(email, password)
+def register_endpoint(username: str = Form(...), password: str = Form(...)):
+    """Register new user with username"""
+    result = register(username, password)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 @app.post("/login/")
-def login_endpoint(email: str = Form(...), password: str = Form(...)):
-    """Login user"""
-    result = login(email, password)
+def login_endpoint(username: str = Form(...), password: str = Form(...)):
+    """Login user with username"""
+    result = login(username, password)
     if "error" in result:
         raise HTTPException(status_code=401, detail=result["error"])
     return result
@@ -72,6 +72,9 @@ async def upload_quotes(
     - carriers_json: JSON string with carrier names
     - files: List of PDF files (property1, liability1, property2, liability2, ...)
     
+    Headers:
+    - X-User-ID: User ID for routing to user-specific sheet tab
+    
     Example:
     {
       "carriers": [
@@ -82,6 +85,10 @@ async def upload_quotes(
     """
     try:
         import json
+        
+        # Extract username from headers or use default
+        username = request.headers.get('X-User-ID', 'default')
+        print(f"📝 Processing upload for user: {username}")
         
         # Parse carriers data
         carriers_info = json.loads(carriers_json)
@@ -142,11 +149,8 @@ async def upload_quotes(
                     print(f"Error processing file metadata: {e}")
                     raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
         
-        # Get user ID (for now, use a default)
-        user_id = "user_1"  # This should come from authenticated user
-        
-        # Process uploads
-        result = process_carrier_uploads(carriers_data, user_id)
+        # Process uploads (username already extracted from headers above)
+        result = process_carrier_uploads(carriers_data, username)
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result.get("message"))
@@ -221,6 +225,7 @@ def analyze_quality(uploadId: str):
     try:
         from tasks import process_phase1_task
         # Queue the task - files are already in GCS from upload step
+        # User ID is stored in metadata and will be retrieved during processing
         task = process_phase1_task.delay(uploadId)
         print(f"✅ Phase 1 queued for upload: {uploadId}, Task ID: {task.id}")
         return {

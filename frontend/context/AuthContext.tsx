@@ -3,16 +3,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface User {
-  user_id: string;
-  email: string;
+  username: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoggedIn: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -46,12 +45,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return 'http://localhost:8000';
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (username: string, password: string) => {
     setLoading(true);
     try {
       const apiUrl = getApiUrl();
       const formData = new FormData();
-      formData.append('email', email);
+      formData.append('username', username);
       formData.append('password', password);
 
       const response = await fetch(`${apiUrl}/login/`, {
@@ -68,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
-      const userData = { user_id: data.user_id, email: data.email };
+      const userData = { username: data.username };
 
       setUser(userData);
       setIsLoggedIn(true);
@@ -80,12 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (username: string, password: string) => {
     setLoading(true);
     try {
       const apiUrl = getApiUrl();
       const formData = new FormData();
-      formData.append('email', email);
+      formData.append('username', username);
       formData.append('password', password);
 
       const response = await fetch(`${apiUrl}/register/`, {
@@ -102,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
-      const userData = { user_id: data.user_id, email: data.email };
+      const userData = { username: data.username };
 
       setUser(userData);
       setIsLoggedIn(true);

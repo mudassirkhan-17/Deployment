@@ -185,6 +185,7 @@ export default function SummaryPage() {
           body: formData,
           headers: {
             'ngrok-skip-browser-warning': 'true',
+            'X-User-ID': user?.username || '',
           },
           signal: controller.signal,
         });

@@ -39,22 +39,30 @@ def get_user(user_id: str):
     users = get_all_users()
     return users.get(user_id)
 
+def user_exists_by_username(username: str):
+    users = get_all_users()
+    for user_data in users.values():
+        if user_data.get('username') == username:
+            return True, username
+    return False, None
+
 def user_exists_by_email(email: str):
+    """Kept for backward compatibility"""
     users = get_all_users()
     for user_id, user_data in users.items():
         if user_data.get('email') == email:
             return True, user_id
     return False, None
 
-def create_user(email: str, password: str):
+def create_user(username: str, password: str):
     users = get_all_users()
-    user_id = f"user_{len(users) + 1}"
     
-    users[user_id] = {
-        "email": email,
+    # Use username as the key
+    users[username] = {
+        "username": username,
         "password": password,
         "created_at": datetime.now().isoformat()
     }
     
     save_users(users)
-    return user_id
+    return username

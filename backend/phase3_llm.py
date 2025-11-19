@@ -715,6 +715,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
     if _check_if_all_carriers_complete(bucket, upload_id):
         print("🎉 ALL CARRIERS COMPLETE! Auto-filling sheets...")
         
+        # Get username from metadata (now using username instead of userId)
+        username = record.get('username', 'default')
+        print(f"📋 Using user-specific sheet tab: '{username}'")
+        
         # Auto-fill GL data to sheet
         try:
             import gspread
@@ -739,7 +743,14 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 ]
                 creds = Credentials.from_service_account_file(creds_path, scopes=scope)
                 client = gspread.authorize(creds)
-                sheet = client.open("Insurance Fields Data").sheet1
+                # Select sheet tab based on username for user-specific data
+                spreadsheet = client.open("Insurance Fields Data")
+                try:
+                    sheet = spreadsheet.worksheet(username)
+                    print(f"✅ Opened user tab: {username}")
+                except gspread.exceptions.WorksheetNotFound:
+                    print(f"⚠️  User tab '{username}' not found. Falling back to MAIN SHEET")
+                    sheet = spreadsheet.sheet1
                 
                 # GL Field to Row mapping (row numbers for each field)
                 gl_field_rows = {
