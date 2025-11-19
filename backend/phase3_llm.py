@@ -497,6 +497,132 @@ def merge_extraction_results(all_results: List[Dict[str, Any]]) -> Dict[str, Any
     return merged_result
 
 
+def extract_company_info_only(bucket: storage.bucket.Bucket, carrier_name: str, safe_carrier_name: str, file_type: str, pdf_info: Dict) -> Dict[str, Any]:
+    """
+    Extract ONLY 5 company information fields from the first available PDF.
+    Called once per upload, not per carrier/PDF.
+    """
+    try:
+        print(f"\n📋 Extracting company info from {carrier_name} {file_type}...")
+        
+        # Find combined file
+        type_short = file_type.replace('PDF', '').lower()
+        combined_files = list(bucket.list_blobs(prefix=f'phase2d/results/{safe_carrier_name}_{type_short}_intelligent_combined_'))
+        if not combined_files:
+            print(f"⚠️  No combined file found")
+            return None
+        
+        combined_file = sorted(combined_files, key=lambda x: x.time_created)[-1].name
+        
+        # Read first 2 pages only (company info is always at top)
+        all_pages = read_combined_file_from_gcs(bucket, combined_file)
+        if not all_pages:
+            return None
+        
+        # Take only first 2 pages
+        first_pages = all_pages[:2]
+        combined_text = "\n\n".join([f"=== PAGE {p['page_num']} ===\n{p['text']}" for p in first_pages])
+        
+        # LLM prompt for company info ONLY (5 fields)
+        prompt = f"""
+Analyze the following insurance document text and extract ONLY these 5 company information fields:
+
+FIELDS TO EXTRACT:
+1. Named Insured - Look for: "Named Insured:", "Insured:", company/business name
+   Example: "HYPERCITY INVESTMENTS LLC"
+
+2. Mailing Address - Look for: "Mailing Address:", "Mailing:", address where mail is sent
+   Example: "7506 MARTIN LUTHER KING BLVD HOUSTON, TX 77033"
+   OR: "PO BOX 12345, ATLANTA, GA 30301"
+   Extract EXACTLY as written, include full address (street/PO Box, city, state, zip) as one line
+
+3. Location Address - Look for: "Location Address:", "Risk Location:", "Premises:", "Location:", physical business location
+   Example: "7506 MARTIN LUTHER KING BLVD HOUSTON, TX 77033"
+   OR: "Same as mailing" or "Same" (if document says so)
+   OR: Different address than mailing
+   IMPORTANT: Extract EXACTLY as written - could be same, different, or "Same as mailing"
+
+4. Policy Term - Look for: "Policy Term:", "Policy Period:", "Term:", date range
+   Example: "12/03/2025-26" or "12/01/2024 - 12/01/2025" or "12/01/2024 to 12/01/2025"
+   Extract exact format shown
+
+5. Description of Business - Look for: "Description of Business:", "Business Type:", "Operations:", "Business Description:"
+   Example: "C STORE WITH GAS - 18 HOURS" or "Convenience Store with Fuel Sales"
+   Extract complete description exactly as written
+
+EXTRACTION RULES:
+- Extract EXACTLY as written in the document
+- Mailing Address and Location Address are SEPARATE fields - extract both independently
+- If Location Address says "Same as mailing" or similar, extract that text
+- If both addresses are identical, extract the full address for BOTH fields
+- For Policy Term: Keep original format (MM/DD/YYYY-YY or MM/DD/YYYY - MM/DD/YYYY)
+- If field not found, set to null
+- Do NOT hallucinate or make up values
+- These fields are typically at the TOP of page 1 or 2
+
+Document text (first 2 pages):
+{combined_text}
+
+Return ONLY valid JSON with these 5 fields:
+{{
+    "Named Insured": "HYPERCITY INVESTMENTS LLC",
+    "Mailing Address": "PO BOX 12345, ATLANTA, GA 30301",
+    "Location Address": "7506 MARTIN LUTHER KING BLVD HOUSTON, TX 77033",
+    "Policy Term": "12/03/2025-26",
+    "Description of Business": "C STORE WITH GAS - 18 HOURS"
+}}
+"""
+        
+        # Use OpenAI API (same format as existing code)
+        client = openai.OpenAI(api_key=openai.api_key)
+        response = client.responses.create(
+            model="gpt-5-nano",
+            input=prompt,
+            reasoning={
+                "effort": "low"
+            },
+            text={
+                "verbosity": "low"
+            }
+        )
+        
+        result_text = response.output_text.strip()
+        
+        # Check if response is empty
+        if not result_text:
+            print(f"  [ERROR] Empty response from LLM")
+            return None
+        
+        # Clean markdown
+        if result_text.startswith('```json'):
+            result_text = result_text[7:]
+        if result_text.startswith('```'):
+            result_text = result_text[3:]
+        if result_text.endswith('```'):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+        
+        # Parse JSON
+        company_info = json.loads(result_text)
+        
+        print(f"✅ Extracted company info:")
+        for key, value in company_info.items():
+            if value:
+                print(f"   {key}: {value}")
+        
+        return company_info
+        
+    except json.JSONDecodeError as e:
+        print(f"  [ERROR] Failed to parse JSON response")
+        print(f"  Raw LLM response: {result_text[:200]}...")
+        return None
+    except Exception as e:
+        print(f"❌ Failed to extract company info: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def save_extraction_results_to_gcs(
     bucket: storage.bucket.Bucket,
     merged_result: Dict[str, Any],
@@ -626,6 +752,40 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
         return {"success": False, "error": f"uploadId {upload_id} not found"}
     
     all_results: List[Dict[str, Any]] = []
+    
+    # ====== STEP 1: Extract company info ONCE from first available PDF ======
+    print("\n" + "="*80)
+    print("📋 STEP 1: EXTRACTING COMPANY INFORMATION (ONE-TIME)")
+    print("="*80)
+    
+    company_info = None
+    for carrier in record.get('carriers', []):
+        carrier_name = carrier.get('carrierName')
+        safe_carrier_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+        
+        # Try property first, then GL, then liquor, then WC
+        for file_type in ['propertyPDF', 'liabilityPDF', 'liquorPDF', 'workersCompPDF']:
+            pdf_info = carrier.get(file_type)
+            if pdf_info and pdf_info.get('path'):
+                company_info = extract_company_info_only(bucket, carrier_name, safe_carrier_name, file_type, pdf_info)
+                if company_info:
+                    print(f"✅ Got company info from {carrier_name} {file_type}")
+                    # Save company info to GCS
+                    company_info_path = f"phase3/results/{upload_id}_company_info.json"
+                    _upload_json_to_gcs(bucket, company_info_path, company_info)
+                    break
+        if company_info:
+            break  # Got it, stop searching
+    
+    if not company_info:
+        print("⚠️  Could not extract company info from any PDF")
+        company_info = {}  # Empty dict
+    
+    print("="*80 + "\n")
+    
+    print("\n" + "="*80)
+    print("📋 STEP 2: EXTRACTING COVERAGE FIELDS FROM ALL PDFs")
+    print("="*80 + "\n")
     
     # Helper function to process a single PDF file
     def process_single_pdf_file(carrier_name, safe_carrier_name, file_type, pdf_info):
@@ -816,6 +976,36 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 print(f"{'='*80}")
                 sheet = reset_user_sheet_to_template(client, username)
                 print(f"{'='*80}\n")
+                
+                # ====== Fill company information (5 fields in Column A, rows 2-6) ======
+                print("  📝 Filling company information...")
+                if company_info:
+                    company_updates = []
+                    
+                    # Build each row as "Label: Value" in a single cell
+                    company_fields = [
+                        ("Named Insured", 2),
+                        ("Mailing Address", 3),
+                        ("Location Address", 4),
+                        ("Policy Term", 5),
+                        ("Description of Business", 6),
+                    ]
+                    
+                    for field_name, row_num in company_fields:
+                        if field_name in company_info and company_info[field_name]:
+                            # Write full text "Label: Value" to cell A{row}
+                            full_text = f"{field_name}: {company_info[field_name]}"
+                            company_updates.append({
+                                'range': f"A{row_num}",
+                                'values': [[full_text]]
+                            })
+                    
+                    # Batch update all at once (maintains sequence)
+                    if company_updates:
+                        sheet.batch_update(company_updates)
+                        print(f"  ✅ Filled {len(company_updates)} company info rows")
+                else:
+                    print("  ⚠️  No company info to fill")
                 
                 # GL Field to Row mapping (row numbers for each field)
                 gl_field_rows = {
