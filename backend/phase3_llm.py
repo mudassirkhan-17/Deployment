@@ -50,6 +50,72 @@ def _upload_json_to_gcs(bucket: storage.bucket.Bucket, blob_path: str, data: Dic
     print(f"✅ Uploaded to: gs://{BUCKET_NAME}/{blob_path}")
 
 
+def reset_user_sheet_to_template(client, username: str):
+    """
+    Reset user sheet to MAIN SHEET template.
+    CRITICAL: This ensures consistent structure EVERY RUN with formatting preserved!
+    
+    Process:
+    1. Get MAIN SHEET (template - never changes)
+    2. Get user sheet (or create if doesn't exist)
+    3. DELETE old user sheet completely
+    4. DUPLICATE MAIN SHEET to user sheet (preserves formatting!)
+    5. Return ready-to-write sheet
+    
+    Uses Google Sheets API to preserve:
+    - ✅ Text values
+    - ✅ Colors & formatting
+    - ✅ Fonts & styles
+    - ✅ Borders & shading
+    - ✅ Everything!
+    """
+    try:
+        # Open the spreadsheet
+        spreadsheet = client.open("Insurance Fields Data")
+        
+        # Step 1: Get template sheet
+        print(f"📋 Reading MAIN SHEET template (with formatting)...")
+        template_sheet = spreadsheet.worksheet("MAIN SHEET")
+        template_sheet_id = template_sheet.id
+        print(f"✅ Template found (Sheet ID: {template_sheet_id})")
+        
+        # Step 2: Check if user sheet exists and delete it
+        try:
+            user_sheet = spreadsheet.worksheet(username)
+            print(f"🗑️  Found old {username} sheet, deleting it...")
+            # Delete the old sheet
+            spreadsheet.del_worksheet(user_sheet)
+            print(f"✅ Old sheet deleted")
+        except Exception as e:
+            print(f"ℹ️  No existing user sheet to delete (first run)")
+        
+        # Step 3: Duplicate MAIN SHEET to user sheet
+        # This preserves ALL formatting, colors, fonts, borders, etc!
+        print(f"📋 Duplicating MAIN SHEET template with formatting...")
+        import gspread
+        from gspread.utils import a1_range_to_grid_range
+        
+        # Use gspread to duplicate the sheet
+        # This copies the entire sheet including formatting
+        new_sheet = spreadsheet.duplicate_sheet(
+            source_sheet_id=template_sheet_id,
+            new_sheet_name=username,
+            insert_sheet_index=None
+        )
+        
+        print(f"✅ Sheet duplicated: {username}")
+        print(f"✅ All formatting PRESERVED (colors, fonts, borders, etc.)")
+        
+        print(f"✅ Sheet '{username}' is RESET and ready for new data!")
+        return new_sheet
+        
+    except Exception as e:
+        print(f"❌ Failed to reset sheet: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
 def read_combined_file_from_gcs(bucket: storage.bucket.Bucket, file_path: str) -> List[Dict[str, Any]]:
     """Read the intelligent combined file from Phase 2D"""
     try:
@@ -743,14 +809,13 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 ]
                 creds = Credentials.from_service_account_file(creds_path, scopes=scope)
                 client = gspread.authorize(creds)
-                # Select sheet tab based on username for user-specific data
-                spreadsheet = client.open("Insurance Fields Data")
-                try:
-                    sheet = spreadsheet.worksheet(username)
-                    print(f"✅ Opened user tab: {username}")
-                except gspread.exceptions.WorksheetNotFound:
-                    print(f"⚠️  User tab '{username}' not found. Falling back to MAIN SHEET")
-                    sheet = spreadsheet.sheet1
+                
+                # CRITICAL: Reset user sheet to MAIN SHEET template before writing
+                print(f"\n{'='*80}")
+                print(f"TEMPLATE RESET PROCEDURE FOR USER: {username}")
+                print(f"{'='*80}")
+                sheet = reset_user_sheet_to_template(client, username)
+                print(f"{'='*80}\n")
                 
                 # GL Field to Row mapping (row numbers for each field)
                 gl_field_rows = {
