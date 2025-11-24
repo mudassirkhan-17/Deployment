@@ -790,60 +790,60 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
     # Helper function to process a single PDF file
     def process_single_pdf_file(carrier_name, safe_carrier_name, file_type, pdf_info):
         """Process one PDF file (property/GL/liquor/workersComp) - called in parallel"""
-        gs_path = pdf_info.get('path')
-        if not gs_path:
+            gs_path = pdf_info.get('path')
+            if not gs_path:
             return None
-        
-        try:
+            
+            try:
             print(f"\n📄 Processing {carrier_name} - {file_type}...")
-            # Extract timestamp from PDF path
-            original_pdf_path = pdf_info.get('path')
-            timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', original_pdf_path)
-            if not timestamp_match:
-                report_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            else:
-                report_timestamp = timestamp_match.group(1)
-            
-            type_short = file_type.replace('PDF', '').lower()
-            
-            # Find latest intelligent combined file
-            combined_files = list(bucket.list_blobs(prefix=f'phase2d/results/{safe_carrier_name}_{type_short}_intelligent_combined_'))
-            if not combined_files:
-                print(f"Warning: No combined file found for {carrier_name} {file_type}")
+                # Extract timestamp from PDF path
+                original_pdf_path = pdf_info.get('path')
+                timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', original_pdf_path)
+                if not timestamp_match:
+                    report_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                else:
+                    report_timestamp = timestamp_match.group(1)
+                
+                type_short = file_type.replace('PDF', '').lower()
+                
+                # Find latest intelligent combined file
+                combined_files = list(bucket.list_blobs(prefix=f'phase2d/results/{safe_carrier_name}_{type_short}_intelligent_combined_'))
+                if not combined_files:
+                    print(f"Warning: No combined file found for {carrier_name} {file_type}")
                 return None
-            
-            # Get latest file
-            combined_file = sorted(combined_files, key=lambda x: x.time_created)[-1].name
-            
-            # Read combined file
-            all_pages = read_combined_file_from_gcs(bucket, combined_file)
-            if not all_pages:
-                print(f"Warning: No pages extracted from {combined_file}")
+                
+                # Get latest file
+                combined_file = sorted(combined_files, key=lambda x: x.time_created)[-1].name
+                
+                # Read combined file
+                all_pages = read_combined_file_from_gcs(bucket, combined_file)
+                if not all_pages:
+                    print(f"Warning: No pages extracted from {combined_file}")
                 return None
-            
-            # Create chunks (4 pages each)
-            chunks = create_chunks(all_pages, chunk_size=4)
-            
+                
+                # Create chunks (4 pages each)
+                chunks = create_chunks(all_pages, chunk_size=4)
+                
             # Process each chunk with LLM - PARALLELIZED for faster processing
             # Route to correct extractor based on file type
             print(f"  Processing {len(chunks)} chunks...")
             
             def process_single_chunk(chunk):
                 """Process one chunk - called in parallel"""
-                if file_type == 'liabilityPDF':
-                    # Import GL-specific extractor for liability
-                    from phase3_gl import extract_with_llm as extract_with_llm_gl
+                    if file_type == 'liabilityPDF':
+                        # Import GL-specific extractor for liability
+                        from phase3_gl import extract_with_llm as extract_with_llm_gl
                     return extract_with_llm_gl(chunk, chunk['chunk_num'], len(chunks))
-                elif file_type == 'liquorPDF':
-                    # Import Liquor-specific extractor for liquor
-                    from phase3_liqour import extract_with_llm as extract_with_llm_liquor
+                    elif file_type == 'liquorPDF':
+                        # Import Liquor-specific extractor for liquor
+                        from phase3_liqour import extract_with_llm as extract_with_llm_liquor
                     return extract_with_llm_liquor(chunk, chunk['chunk_num'], len(chunks))
                 elif file_type == 'workersCompPDF':
                     # Import Workers Comp-specific extractor
                     from phase3_workers_comp import extract_with_llm as extract_with_llm_wc
                     return extract_with_llm_wc(chunk, chunk['chunk_num'], len(chunks))
-                else:
-                    # Use property extraction for property PDFs
+                    else:
+                        # Use property extraction for property PDFs
                     return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
             
             # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
@@ -856,42 +856,42 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 delayed(process_single_chunk)(chunk)
                 for chunk in chunks
             )
-            
-            # Merge all results - route to correct merge function based on file type
+                
+                # Merge all results - route to correct merge function based on file type
             print(f"  Merging results from {len(chunk_results)} chunks...")
-            if file_type == 'liabilityPDF':
-                # Import GL-specific merge for liability extraction
-                from phase3_gl import merge_extraction_results as merge_extraction_results_gl
-                merged_result = merge_extraction_results_gl(chunk_results)
-            elif file_type == 'liquorPDF':
-                # Import Liquor-specific merge for liquor extraction
-                from phase3_liqour import merge_extraction_results as merge_extraction_results_liquor
-                merged_result = merge_extraction_results_liquor(chunk_results)
+                if file_type == 'liabilityPDF':
+                    # Import GL-specific merge for liability extraction
+                    from phase3_gl import merge_extraction_results as merge_extraction_results_gl
+                    merged_result = merge_extraction_results_gl(chunk_results)
+                elif file_type == 'liquorPDF':
+                    # Import Liquor-specific merge for liquor extraction
+                    from phase3_liqour import merge_extraction_results as merge_extraction_results_liquor
+                    merged_result = merge_extraction_results_liquor(chunk_results)
             elif file_type == 'workersCompPDF':
                 # Import Workers Comp-specific merge
                 from phase3_workers_comp import merge_extraction_results as merge_extraction_results_wc
                 merged_result = merge_extraction_results_wc(chunk_results)
-            else:
-                # Use property merge for property PDFs
-                merged_result = merge_extraction_results(chunk_results)
-            
-            # Save results to GCS
-            final_path = save_extraction_results_to_gcs(bucket, merged_result, carrier_name, safe_carrier_name, file_type, report_timestamp)
-            
+                else:
+                    # Use property merge for property PDFs
+                    merged_result = merge_extraction_results(chunk_results)
+                
+                # Save results to GCS
+                final_path = save_extraction_results_to_gcs(bucket, merged_result, carrier_name, safe_carrier_name, file_type, report_timestamp)
+                
             return {
-                'carrierName': carrier_name,
-                'fileType': file_type,
-                'finalFields': f'gs://{BUCKET_NAME}/{final_path}',
-                'totalFields': len([k for k in merged_result.keys() if not k.startswith('_')]),
-                'fieldsFound': len([k for k, v in merged_result.items() if v is not None and not k.startswith('_')])
+                    'carrierName': carrier_name,
+                    'fileType': file_type,
+                    'finalFields': f'gs://{BUCKET_NAME}/{final_path}',
+                    'totalFields': len([k for k in merged_result.keys() if not k.startswith('_')]),
+                    'fieldsFound': len([k for k, v in merged_result.items() if v is not None and not k.startswith('_')])
             }
-        
-        except Exception as e:
+                
+            except Exception as e:
             print(f"❌ Error processing {carrier_name} {file_type}: {e}")
             return {
-                'carrierName': carrier_name,
-                'fileType': file_type,
-                'error': str(e)
+                    'carrierName': carrier_name,
+                    'fileType': file_type,
+                    'error': str(e)
             }
     
     # Process each carrier
@@ -1004,7 +1004,7 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     if company_updates:
                         sheet.batch_update(company_updates)
                         print(f"  ✅ Filled {len(company_updates)} company info rows")
-                else:
+            else:
                     print("  ⚠️  No company info to fill")
                 
                 # GL Field to Row mapping (row numbers for each field)
