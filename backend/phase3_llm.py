@@ -790,39 +790,39 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
     # Helper function to process a single PDF file
     def process_single_pdf_file(carrier_name, safe_carrier_name, file_type, pdf_info):
         """Process one PDF file (property/GL/liquor/workersComp) - called in parallel"""
-            gs_path = pdf_info.get('path')
-            if not gs_path:
+        gs_path = pdf_info.get('path')
+        if not gs_path:
             return None
-            
-            try:
+        
+        try:
             print(f"\n📄 Processing {carrier_name} - {file_type}...")
-                # Extract timestamp from PDF path
-                original_pdf_path = pdf_info.get('path')
-                timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', original_pdf_path)
-                if not timestamp_match:
-                    report_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                else:
-                    report_timestamp = timestamp_match.group(1)
-                
-                type_short = file_type.replace('PDF', '').lower()
-                
-                # Find latest intelligent combined file
-                combined_files = list(bucket.list_blobs(prefix=f'phase2d/results/{safe_carrier_name}_{type_short}_intelligent_combined_'))
-                if not combined_files:
-                    print(f"Warning: No combined file found for {carrier_name} {file_type}")
+            # Extract timestamp from PDF path
+            original_pdf_path = pdf_info.get('path')
+            timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', original_pdf_path)
+            if not timestamp_match:
+                report_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            else:
+                report_timestamp = timestamp_match.group(1)
+            
+            type_short = file_type.replace('PDF', '').lower()
+            
+            # Find latest intelligent combined file
+            combined_files = list(bucket.list_blobs(prefix=f'phase2d/results/{safe_carrier_name}_{type_short}_intelligent_combined_'))
+            if not combined_files:
+                print(f"Warning: No combined file found for {carrier_name} {file_type}")
                 return None
-                
-                # Get latest file
-                combined_file = sorted(combined_files, key=lambda x: x.time_created)[-1].name
-                
-                # Read combined file
-                all_pages = read_combined_file_from_gcs(bucket, combined_file)
-                if not all_pages:
-                    print(f"Warning: No pages extracted from {combined_file}")
+            
+            # Get latest file
+            combined_file = sorted(combined_files, key=lambda x: x.time_created)[-1].name
+            
+            # Read combined file
+            all_pages = read_combined_file_from_gcs(bucket, combined_file)
+            if not all_pages:
+                print(f"Warning: No pages extracted from {combined_file}")
                 return None
-                
-                # Create chunks (4 pages each)
-                chunks = create_chunks(all_pages, chunk_size=4)
+            
+            # Create chunks (4 pages each)
+            chunks = create_chunks(all_pages, chunk_size=4)
                 
             # Process each chunk with LLM - PARALLELIZED for faster processing
             # Route to correct extractor based on file type
@@ -830,20 +830,20 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
             
             def process_single_chunk(chunk):
                 """Process one chunk - called in parallel"""
-                    if file_type == 'liabilityPDF':
-                        # Import GL-specific extractor for liability
-                        from phase3_gl import extract_with_llm as extract_with_llm_gl
+                if file_type == 'liabilityPDF':
+                    # Import GL-specific extractor for liability
+                    from phase3_gl import extract_with_llm as extract_with_llm_gl
                     return extract_with_llm_gl(chunk, chunk['chunk_num'], len(chunks))
-                    elif file_type == 'liquorPDF':
-                        # Import Liquor-specific extractor for liquor
-                        from phase3_liqour import extract_with_llm as extract_with_llm_liquor
+                elif file_type == 'liquorPDF':
+                    # Import Liquor-specific extractor for liquor
+                    from phase3_liqour import extract_with_llm as extract_with_llm_liquor
                     return extract_with_llm_liquor(chunk, chunk['chunk_num'], len(chunks))
                 elif file_type == 'workersCompPDF':
                     # Import Workers Comp-specific extractor
                     from phase3_workers_comp import extract_with_llm as extract_with_llm_wc
                     return extract_with_llm_wc(chunk, chunk['chunk_num'], len(chunks))
-                    else:
-                        # Use property extraction for property PDFs
+                else:
+                    # Use property extraction for property PDFs
                     return extract_with_llm(chunk, chunk['chunk_num'], len(chunks))
             
             # Process all chunks in parallel (n_jobs=2 to allow multiple Celery tasks)
@@ -856,42 +856,42 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                 delayed(process_single_chunk)(chunk)
                 for chunk in chunks
             )
-                
-                # Merge all results - route to correct merge function based on file type
+            
+            # Merge all results - route to correct merge function based on file type
             print(f"  Merging results from {len(chunk_results)} chunks...")
-                if file_type == 'liabilityPDF':
-                    # Import GL-specific merge for liability extraction
-                    from phase3_gl import merge_extraction_results as merge_extraction_results_gl
-                    merged_result = merge_extraction_results_gl(chunk_results)
-                elif file_type == 'liquorPDF':
-                    # Import Liquor-specific merge for liquor extraction
-                    from phase3_liqour import merge_extraction_results as merge_extraction_results_liquor
-                    merged_result = merge_extraction_results_liquor(chunk_results)
+            if file_type == 'liabilityPDF':
+                # Import GL-specific merge for liability extraction
+                from phase3_gl import merge_extraction_results as merge_extraction_results_gl
+                merged_result = merge_extraction_results_gl(chunk_results)
+            elif file_type == 'liquorPDF':
+                # Import Liquor-specific merge for liquor extraction
+                from phase3_liqour import merge_extraction_results as merge_extraction_results_liquor
+                merged_result = merge_extraction_results_liquor(chunk_results)
             elif file_type == 'workersCompPDF':
                 # Import Workers Comp-specific merge
                 from phase3_workers_comp import merge_extraction_results as merge_extraction_results_wc
                 merged_result = merge_extraction_results_wc(chunk_results)
-                else:
-                    # Use property merge for property PDFs
-                    merged_result = merge_extraction_results(chunk_results)
-                
-                # Save results to GCS
-                final_path = save_extraction_results_to_gcs(bucket, merged_result, carrier_name, safe_carrier_name, file_type, report_timestamp)
-                
+            else:
+                # Use property merge for property PDFs
+                merged_result = merge_extraction_results(chunk_results)
+            
+            # Save results to GCS
+            final_path = save_extraction_results_to_gcs(bucket, merged_result, carrier_name, safe_carrier_name, file_type, report_timestamp)
+            
             return {
-                    'carrierName': carrier_name,
-                    'fileType': file_type,
-                    'finalFields': f'gs://{BUCKET_NAME}/{final_path}',
-                    'totalFields': len([k for k in merged_result.keys() if not k.startswith('_')]),
-                    'fieldsFound': len([k for k, v in merged_result.items() if v is not None and not k.startswith('_')])
+                'carrierName': carrier_name,
+                'fileType': file_type,
+                'finalFields': f'gs://{BUCKET_NAME}/{final_path}',
+                'totalFields': len([k for k in merged_result.keys() if not k.startswith('_')]),
+                'fieldsFound': len([k for k, v in merged_result.items() if v is not None and not k.startswith('_')])
             }
-                
-            except Exception as e:
+            
+        except Exception as e:
             print(f"❌ Error processing {carrier_name} {file_type}: {e}")
             return {
-                    'carrierName': carrier_name,
-                    'fileType': file_type,
-                    'error': str(e)
+                'carrierName': carrier_name,
+                'fileType': file_type,
+                'error': str(e)
             }
     
     # Process each carrier
@@ -1005,10 +1005,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                         sheet.batch_update(company_updates)
                         print(f"  ✅ Filled {len(company_updates)} company info rows")
             else:
-                    print("  ⚠️  No company info to fill")
-                
-                # GL Field to Row mapping (row numbers for each field)
-                gl_field_rows = {
+                print("  ⚠️  No company info to fill")
+            
+            # GL Field to Row mapping (row numbers for each field)
+            gl_field_rows = {
                     "Each Occurrence/General Aggregate Limits": 8,
                     "Liability Deductible - Per claim or Per Occ basis": 9,
                     "Hired Auto And Non-Owned Auto Liability - Without Delivery Service": 10,
@@ -1034,10 +1034,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Contaminated fuel": 30,
                     "Liquor Liability": 31,
                     "Additional Insured - Managers Or Lessors Of Premises": 32,
-                }
-                
-                # Property Field to Row mapping
-                property_field_rows = {
+            }
+            
+            # Property Field to Row mapping
+            property_field_rows = {
                     "Construction Type": 46,
                     "Valuation and Coinsurance": 47,
                     "Cosmetic Damage": 48,
@@ -1072,10 +1072,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Subjectivity:": 78,
                     "Minimum Earned": 79,
                     "Total Premium (With/Without Terrorism)": 80,
-                }
-                
-                # Liquor Field to Row mapping
-                liquor_field_rows = {
+            }
+            
+            # Liquor Field to Row mapping
+            liquor_field_rows = {
                     "Each Occurrence/General Aggregate Limits": 36,
                     "Sales - Subject to Audit": 37,
                     "Assault & Battery/Firearms/Active Assailant": 38,
@@ -1085,10 +1085,10 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Total Premium (With/Without Terrorism)": 42,
                     "Liquor Premium": 42,  # Same as Total Premium
                     "Policy Premium": 42,  # Same as Total Premium
-                }
-                
-                # Workers Comp Field to Row mapping
-                workers_comp_field_rows = {
+            }
+            
+            # Workers Comp Field to Row mapping
+            workers_comp_field_rows = {
                     "Limits": 86,
                     "FEIN #": 87,
                     "Payroll - Subject to Audit": 88,
@@ -1097,323 +1097,277 @@ def process_upload_llm_extraction(upload_id: str) -> Dict[str, Any]:
                     "Total Premium": 90,
                     "Workers Compensation Premium": 90,  # Same as Total Premium
                     "Policy Premium": 90,  # Same as Total Premium
-                }
+            }
+            
+            # Columns for each carrier: B (Option 1), C (Option 2), D (Option 3)
+            columns = ['B', 'C', 'D']
+            
+            # STEP 1: Clear old data from all columns (B, C, D) for GL, Property, Liquor, and Workers Comp rows
+            print("  🧹 Clearing old data from columns B, C, D...")
+            clear_ranges = []
+            # GL rows (8-32)
+            for col in columns:
+                clear_ranges.append(f"{col}8:{col}32")
+            # Liquor rows (36-42)
+            for col in columns:
+                clear_ranges.append(f"{col}36:{col}42")
+            # Property rows (46-80)
+            for col in columns:
+                clear_ranges.append(f"{col}46:{col}80")
+            # Workers Comp rows (86-90)
+            for col in columns:
+                clear_ranges.append(f"{col}86:{col}90")
+            # Premium Breakdown rows (91-97) - clear entire section
+            for col in columns:
+                clear_ranges.append(f"{col}91:{col}97")  # Premium Breakdown section (GL, Property, Umbrella, LL, WC, Total Policy Premium)
+            
+            # Clear all ranges in one batch call
+            if clear_ranges:
+                sheet.batch_clear(clear_ranges)
+            print("  ✅ Cleared old data from columns B, C, D")
+            
+            # STEP 2: Assign one column per carrier (for ALL their file types)
+            updates = []
+            
+            # Loop through each carrier ONCE and get their column
+            for carrier_index, carrier in enumerate(record.get('carriers', [])):
+                if carrier_index >= 3:  # Max 3 carriers
+                    break
                 
-                # Columns for each carrier: B (Option 1), C (Option 2), D (Option 3)
-                columns = ['B', 'C', 'D']
+                carrier_name = carrier.get('carrierName', 'Unknown')
+                column = columns[carrier_index]  # This carrier's column (B, C, or D)
                 
-                # STEP 1: Clear old data from all columns (B, C, D) for GL, Property, Liquor, and Workers Comp rows
-                print("  🧹 Clearing old data from columns B, C, D...")
-                clear_ranges = []
-                # GL rows (8-32)
-                for col in columns:
-                    clear_ranges.append(f"{col}8:{col}32")
-                # Liquor rows (36-42)
-                for col in columns:
-                    clear_ranges.append(f"{col}36:{col}42")
-                # Property rows (46-80)
-                for col in columns:
-                    clear_ranges.append(f"{col}46:{col}80")
-                # Workers Comp rows (86-90)
-                for col in columns:
-                    clear_ranges.append(f"{col}86:{col}90")
-                # Premium Breakdown rows (91-97) - clear entire section
-                for col in columns:
-                    clear_ranges.append(f"{col}91:{col}97")  # Premium Breakdown section (GL, Property, Umbrella, LL, WC, Total Policy Premium)
-                
-                # Clear all ranges in one batch call
-                if clear_ranges:
-                    sheet.batch_clear(clear_ranges)
-                print("  ✅ Cleared old data from columns B, C, D")
-                
-                # STEP 2: Assign one column per carrier (for ALL their file types)
-                updates = []
-                
-                # Loop through each carrier ONCE and get their column
-                for carrier_index, carrier in enumerate(record.get('carriers', [])):
-                    if carrier_index >= 3:  # Max 3 carriers
-                        break
-                    
-                    carrier_name = carrier.get('carrierName', 'Unknown')
-                    column = columns[carrier_index]  # This carrier's column (B, C, or D)
-                    
-                    # Process GL data if exists
-                    if carrier.get('liabilityPDF'):
-                        pdf_path = carrier['liabilityPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                # Process GL data if exists
+                if carrier.get('liabilityPDF'):
+                    pdf_path = carrier['liabilityPDF']['path']
+                    timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                    if timestamp_match:
+                        timestamp = timestamp_match.group(1)
+                        safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                        
+                        # Load GL data from GCS
+                        gl_file = f"phase3/results/{safe_name}_liability_final_validated_fields_{timestamp}.json"
+                        blob = bucket.blob(gl_file)
+                        if blob.exists():
+                            gl_data = json.loads(blob.download_as_string().decode('utf-8'))
                             
-                            # Load GL data from GCS
-                            gl_file = f"phase3/results/{safe_name}_liability_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(gl_file)
-                            if blob.exists():
-                                gl_data = json.loads(blob.download_as_string().decode('utf-8'))
+                            # For row 28 (Total Premium), use priority logic to match row 91
+                            for field_name, row_num in gl_field_rows.items():
+                                # Special handling for row 28 - use priority like row 91
+                                if row_num == 28:
+                                    continue  # Handle row 28 separately below
                                 
-                                # For row 28 (Total Premium), use priority logic to match row 91
-                                for field_name, row_num in gl_field_rows.items():
-                                    # Special handling for row 28 - use priority like row 91
-                                    if row_num == 28:
-                                        continue  # Handle row 28 separately below
-                                    
-                                    if field_name in gl_data:
-                                        field_info = gl_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            cell_ref = f"{column}{row_num}"
-                                            updates.append({
-                                                'range': cell_ref,
-                                                'values': [[str(llm_value)]]
-                                            })
-                                
-                                # Handle row 28 (Total Premium) with priority logic to match row 91
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
-                                    if field_name in gl_data:
-                                        field_info = gl_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}28",  # Total Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break  # Stop at first match, same as row 91
-                                
-                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) GL → Column {column}")
-                    
-                    # Process Property data if exists (SAME carrier, SAME column)
-                    if carrier.get('propertyPDF'):
-                        pdf_path = carrier['propertyPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                                if field_name in gl_data:
+                                    field_info = gl_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        cell_ref = f"{column}{row_num}"
+                                        updates.append({
+                                            'range': cell_ref,
+                                            'values': [[str(llm_value)]]
+                                        })
                             
-                            # Load Property data from GCS
-                            property_file = f"phase3/results/{safe_name}_property_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(property_file)
-                            if blob.exists():
-                                property_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                
-                                # For row 80 (Total Premium), use priority logic to match row 92
-                                for field_name, row_num in property_field_rows.items():
-                                    # Special handling for row 80 - use priority like row 92
-                                    if row_num == 80:
-                                        continue  # Handle row 80 separately below
-                                    
-                                    if field_name in property_data:
-                                        field_info = property_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            cell_ref = f"{column}{row_num}"
-                                            updates.append({
-                                                'range': cell_ref,
-                                                'values': [[str(llm_value)]]
-                                            })
-                                
-                                # Handle row 80 (Total Premium) with priority logic to match row 92
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
-                                    if field_name in property_data:
-                                        field_info = property_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}80",  # Total Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break  # Stop at first match, same as row 92
-                                
-                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Property → Column {column}")
-                    
-                    # Process Liquor data if exists (SAME carrier, SAME column)
-                    if carrier.get('liquorPDF'):
-                        pdf_path = carrier['liquorPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            # Handle row 28 (Total Premium) with priority logic to match row 91
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
+                                if field_name in gl_data:
+                                    field_info = gl_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}28",  # Total Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break  # Stop at first match, same as row 91
                             
-                            # Load Liquor data from GCS
-                            liquor_file = f"phase3/results/{safe_name}_liquor_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(liquor_file)
-                            if blob.exists():
-                                liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                
-                                # Use the liquor field rows mapping defined earlier
-                                # For row 42 (Total Premium), use priority logic to match row 94
-                                for field_name, row_num in liquor_field_rows.items():
-                                    # Special handling for row 42 - use priority like row 94
-                                    if row_num == 42:
-                                        continue  # Handle row 42 separately below
-                                    
-                                    if field_name in liquor_data:
-                                        field_info = liquor_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            cell_ref = f"{column}{row_num}"
-                                            updates.append({
-                                                'range': cell_ref,
-                                                'values': [[str(llm_value)]]
-                                            })
-                                
-                                # Handle row 42 (Total Premium) with priority logic to match row 94
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Liquor Premium", "Policy Premium", "Total Premium Liquor (With/Without Terrorism)"]:
-                                    if field_name in liquor_data:
-                                        field_info = liquor_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}42",  # Total Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break  # Stop at first match, same as row 94
-                                
-                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Liquor → Column {column}")
-                    
-                    # Process Workers Comp data if exists (SAME carrier, SAME column)
-                    if carrier.get('workersCompPDF'):
-                        pdf_path = carrier['workersCompPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                            print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) GL → Column {column}")
                             
-                            # Load Workers Comp data from GCS
-                            wc_file = f"phase3/results/{safe_name}_workerscomp_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(wc_file)
-                            if blob.exists():
-                                wc_data = json.loads(blob.download_as_string().decode('utf-8'))
+                            # Also copy to Premium Breakdown row 91
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
+                                if field_name in gl_data:
+                                    field_info = gl_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}91",  # GL Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break
+                
+                # Process Property data if exists (SAME carrier, SAME column)
+                if carrier.get('propertyPDF'):
+                    pdf_path = carrier['propertyPDF']['path']
+                    timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                    if timestamp_match:
+                        timestamp = timestamp_match.group(1)
+                        safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                        
+                        # Load Property data from GCS
+                        property_file = f"phase3/results/{safe_name}_property_final_validated_fields_{timestamp}.json"
+                        blob = bucket.blob(property_file)
+                        if blob.exists():
+                            property_data = json.loads(blob.download_as_string().decode('utf-8'))
+                            
+                            # For row 80 (Total Premium), use priority logic to match row 92
+                            for field_name, row_num in property_field_rows.items():
+                                # Special handling for row 80 - use priority like row 92
+                                if row_num == 80:
+                                    continue  # Handle row 80 separately below
                                 
-                                # Use the workers comp field rows mapping defined earlier
-                                # Skip "Excluded Officer" fields - leave row 89 empty
-                                fields_to_skip = ["Excluded Officer", "If Opting out from Workers Compensation Coverage"]
-                                # For row 90 (Total Premium), use priority logic to match row 96
-                                for field_name, row_num in workers_comp_field_rows.items():
-                                    if field_name in fields_to_skip:
-                                        continue  # Skip these fields, leave row 89 empty
-                                    
-                                    # Special handling for row 90 - use priority like row 96
-                                    if row_num == 90:
-                                        continue  # Handle row 90 separately below
-                                    
-                                    if field_name in wc_data:
-                                        field_info = wc_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            cell_ref = f"{column}{row_num}"
-                                            updates.append({
-                                                'range': cell_ref,
-                                                'values': [[str(llm_value)]]
-                                            })
+                                if field_name in property_data:
+                                    field_info = property_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        cell_ref = f"{column}{row_num}"
+                                        updates.append({
+                                            'range': cell_ref,
+                                            'values': [[str(llm_value)]]
+                                        })
+                            
+                            # Handle row 80 (Total Premium) with priority logic to match row 92
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
+                                if field_name in property_data:
+                                    field_info = property_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}80",  # Total Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break  # Stop at first match, same as row 92
+                            
+                            print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Property → Column {column}")
+                            
+                            # Also copy to Premium Breakdown row 92
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
+                                if field_name in property_data:
+                                    field_info = property_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}92",  # Property Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break
+                
+                # Process Liquor data if exists (SAME carrier, SAME column)
+                if carrier.get('liquorPDF'):
+                    pdf_path = carrier['liquorPDF']['path']
+                    timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                    if timestamp_match:
+                        timestamp = timestamp_match.group(1)
+                        safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                        
+                        # Load Liquor data from GCS
+                        liquor_file = f"phase3/results/{safe_name}_liquor_final_validated_fields_{timestamp}.json"
+                        blob = bucket.blob(liquor_file)
+                        if blob.exists():
+                            liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
+                            
+                            # Use the liquor field rows mapping defined earlier
+                            # For row 42 (Total Premium), use priority logic to match row 94
+                            for field_name, row_num in liquor_field_rows.items():
+                                # Special handling for row 42 - use priority like row 94
+                                if row_num == 42:
+                                    continue  # Handle row 42 separately below
                                 
-                                # Handle row 90 (Total Premium) with priority logic to match row 96
-                                # Use EXACT same priority list as row 96 to ensure consistency
-                                for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
-                                    if field_name in wc_data:
-                                        field_info = wc_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}90",  # Total Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break  # Stop at first match, same as row 96
+                                if field_name in liquor_data:
+                                    field_info = liquor_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        cell_ref = f"{column}{row_num}"
+                                        updates.append({
+                                            'range': cell_ref,
+                                            'values': [[str(llm_value)]]
+                                        })
+                            
+                            # Handle row 42 (Total Premium) with priority logic to match row 94
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Liquor Premium", "Policy Premium", "Total Premium Liquor (With/Without Terrorism)"]:
+                                if field_name in liquor_data:
+                                    field_info = liquor_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}42",  # Total Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break  # Stop at first match, same as row 94
+                            
+                            print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Liquor → Column {column}")
+                            
+                            # Also copy to Premium Breakdown row 94
+                            for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Total Premium Liquor (With/Without Terrorism)"]:
+                                if field_name in liquor_data:
+                                    field_info = liquor_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}94",  # LL premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break
+                
+                # Process Workers Comp data if exists (SAME carrier, SAME column)
+                if carrier.get('workersCompPDF'):
+                    pdf_path = carrier['workersCompPDF']['path']
+                    timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
+                    if timestamp_match:
+                        timestamp = timestamp_match.group(1)
+                        safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
+                        
+                        # Load Workers Comp data from GCS
+                        wc_file = f"phase3/results/{safe_name}_workerscomp_final_validated_fields_{timestamp}.json"
+                        blob = bucket.blob(wc_file)
+                        if blob.exists():
+                            wc_data = json.loads(blob.download_as_string().decode('utf-8'))
+                            
+                            # Use the workers comp field rows mapping defined earlier
+                            # Skip "Excluded Officer" fields - leave row 89 empty
+                            fields_to_skip = ["Excluded Officer", "If Opting out from Workers Compensation Coverage"]
+                            # For row 90 (Total Premium), use priority logic to match row 96
+                            for field_name, row_num in workers_comp_field_rows.items():
+                                if field_name in fields_to_skip:
+                                    continue  # Skip these fields, leave row 89 empty
                                 
-                                print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Workers Comp → Column {column}")
-                    
-                    # STEP 3: Copy Total Premium values to Premium Breakdown section
-                    # GL Total Premium (row 28) → GL Premium (row 91)
-                    if carrier.get('liabilityPDF'):
-                        pdf_path = carrier['liabilityPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
-                            gl_file = f"phase3/results/{safe_name}_liability_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(gl_file)
-                            if blob.exists():
-                                gl_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                # Try all possible field name variations
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total GL Premium", "Total Premium GL (With/Without Terrorism)"]:
-                                    if field_name in gl_data:
-                                        field_info = gl_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}91",  # GL Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break
-                    
-                    # Property Total Premium (row 80) → Property Premium (row 92)
-                    if carrier.get('propertyPDF'):
-                        pdf_path = carrier['propertyPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
-                            property_file = f"phase3/results/{safe_name}_property_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(property_file)
-                            if blob.exists():
-                                property_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                # Try all possible field name variations
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Property Premium", "Total Premium Property (With/Without Terrorism)"]:
-                                    if field_name in property_data:
-                                        field_info = property_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}92",  # Property Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break
-                    
-                    # Liquor Total Premium (row 42) → LL premium (row 94)
-                    if carrier.get('liquorPDF'):
-                        pdf_path = carrier['liquorPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
-                            liquor_file = f"phase3/results/{safe_name}_liquor_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(liquor_file)
-                            if blob.exists():
-                                liquor_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                # Try all possible field name variations
-                                for field_name in ["Total Premium (With/Without Terrorism)", "Total Liquor Premium", "Total Premium Liquor (With/Without Terrorism)"]:
-                                    if field_name in liquor_data:
-                                        field_info = liquor_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}94",  # LL premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break
-                    
-                    # Workers Comp Total Premium (row 90) → WC Premium (row 96)
-                    if carrier.get('workersCompPDF'):
-                        pdf_path = carrier['workersCompPDF']['path']
-                        timestamp_match = re.search(r'_(\d{8}_\d{6})\.pdf$', pdf_path)
-                        if timestamp_match:
-                            timestamp = timestamp_match.group(1)
-                            safe_name = carrier_name.lower().replace(" ", "_").replace("&", "and")
-                            wc_file = f"phase3/results/{safe_name}_workerscomp_final_validated_fields_{timestamp}.json"
-                            blob = bucket.blob(wc_file)
-                            if blob.exists():
-                                wc_data = json.loads(blob.download_as_string().decode('utf-8'))
-                                # Use the SAME field lookup priority as row 90 to ensure consistency
-                                # Row 90 uses: "Total Premium", "Workers Compensation Premium", "Policy Premium"
-                                for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
-                                    if field_name in wc_data:
-                                        field_info = wc_data[field_name]
-                                        llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
-                                        if llm_value:
-                                            updates.append({
-                                                'range': f"{column}96",  # WC Premium row
-                                                'values': [[str(llm_value)]]
-                                            })
-                                            break
+                                # Special handling for row 90 - use priority like row 96
+                                if row_num == 90:
+                                    continue  # Handle row 90 separately below
+                                
+                                if field_name in wc_data:
+                                    field_info = wc_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        cell_ref = f"{column}{row_num}"
+                                        updates.append({
+                                            'range': cell_ref,
+                                            'values': [[str(llm_value)]]
+                                        })
+                            
+                            # Handle row 90 (Total Premium) with priority logic to match row 96
+                            # Use EXACT same priority list as row 96 to ensure consistency
+                            for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
+                                if field_name in wc_data:
+                                    field_info = wc_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}90",  # Total Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break  # Stop at first match, same as row 96
+                            
+                            print(f"  ✓ Carrier {carrier_index + 1} ({carrier_name}) Workers Comp → Column {column}")
+                            
+                            # Also copy to Premium Breakdown row 96
+                            for field_name in ["Total Premium", "Workers Compensation Premium", "Policy Premium", "Total Premium (With/Without Terrorism)"]:
+                                if field_name in wc_data:
+                                    field_info = wc_data[field_name]
+                                    llm_value = field_info.get("llm_value", "") if isinstance(field_info, dict) else field_info
+                                    if llm_value:
+                                        updates.append({
+                                            'range': f"{column}96",  # WC Premium row
+                                            'values': [[str(llm_value)]]
+                                        })
+                                        break
                 
                 # Batch update sheet (GL + Property + Liquor + Workers Comp + Premium Breakdown combined)
                 if updates:
