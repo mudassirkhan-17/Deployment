@@ -15,3 +15,13 @@ dump.rdb
 
 # Environment variables
 .env.local
+
+qc-system/*_ocr_output.txt
+qc-system/qc_extraction_content.txt
+qc-system/qc_extraction_results.json
+qc-system/llm_extracted_fields.json
+
+# Policy PDFs (test data)
+policy/*.pdf
+qc-system/*.pdf
+docs/*.pdf

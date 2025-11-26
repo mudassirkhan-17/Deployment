@@ -1,0 +1,115 @@
+{
+  "timestamp": "2025-11-24T13:56:23.800751",
+  "llm_model": "gpt-5-nano",
+  "source": "heading-extracted_content",
+  "results": {
+    "package2_ocr_output.txt": {
+      "GL": {
+        "policy_number": "_PAV0587972",
+        "named_insured": "7839 RISING SUN LLC",
+        "dba": "ROAD TRIP",
+        "limits": {
+          "each_occurrence": "$ 1,000,000",
+          "general_aggregate": "$ 2,000,000",
+          "products_completed_operations_aggregate": "$ Included",
+          "personal_advertising_injury": "$ 1,000,000",
+          "damage_to_rented_premises": "$ 100,000",
+          "medical_expense": "$ 5,000"
+        },
+        "locations": [
+          "No. 1 4 7839 Rankin Rd Humble 1 77396"
+        ],
+        "forms_and_endorsements": "As per $1007 [12-00]"
+      },
+      "PROPERTY": {
+        "policy_number": "PAV0587972",
+        "named_insured": "7839 RISING SUN LLC",
+        "dba": "ROAD TRIP",
+        "mailing_address": "7839 Rankin RD, Humble, TX 77396",
+        "effective_date": "September 25, 2025",
+        "expiration_date": "September 25, 2026",
+        "insurer_name": "PENN-AMERICA INSURANCE COMPANY",
+        "insurer_naic": "",
+        "premiums": {
+          "total_premium_inception": "$12,007.00",
+          "policy_fee": "$600.00",
+          "inspection_fee": "$175.00",
+          "surplus_lines_tax": "$619.93",
+          "stamping_fee": "$5.11",
+          "total": "$13,407.04"
+        },
+        "location_description": "7839 Rankin RD, Humble, TX 77396",
+        "locations": [
+          "7839 Rankin RD, Humble, TX 77396"
+        ],
+        "description_of_operations": "LRO C-STORE",
+        "forms_and_endorsements": [
+          "COMMON POLICY",
+          "NAA158 06-23 TX IMPORTANT NOTICE TO POLICYHOLDERS",
+          "GAA7540 01-23 IMPORTANT NOTICE FOR POLICYHOLDERS REGARDING PUBLIC HEALTH EMERGENCY",
+          "GAA7538 01-23 GLOBAL INDEMNITY PRIVACY NOTICE",
+          "GAA7539 01-23 CLAIMS REPORTING PROCEDURES",
+          "GAA7541 01-23 NOTICE TO POLICYHOLDERS - LOSS CONTROL ROOF ASSESSMENT",
+          "GBLI9900 04-25 GBLI JACKET",
+          "GAA158? (not specified)",
+          "$1100 09-16 PENN-AMERICA COMMON POLICY DECLARATIONS",
+          "IL0017 11-98 COMMON POLICY CONDITIONS",
+          "ILOO021 09-08 NUCLEAR ENERGY LIABILITY EXCLUSION ENDORSEMENT",
+          "EAA230 02-15 SERVICE OF SUIT",
+          "IL0985 12-20 DISCLOSURE PURSUANT TO TERRORISM RISK INSURANCE ACT",
+          "$1003 08-91 MINIMUM EARNED PREMIUM",
+          "GIL2000 01-23 EXCLUSION - TERRORISM",
+          "IL0003 09-08 CALCULATION OF PREMIUM",
+          "EPA1739 06-15 CHANGES - ACTUAL CASH VALUE",
+          "CGO001 04-13 CGL COVERAGE FORM",
+          "CG0069 12-23 EXCLUSION - VIOLATION OF LAW ADDRESSING DATA PRIVACY",
+          "CG0300 01-96 DEDUCTIBLE LIABILITY INSURANCE",
+          "CG2106 12-23 EXCLUSION - ACCESS OR DISCLOSURE OF CONFIDENTIAL OR PERSONAL MATERIAL OR INFORMATION",
+          "CG2109 06-15 EXCLUSION - UNMANNED AIRCRAFT",
+          "CG4035 2-23 EXCLUSION - CYBER INCIDENT",
+          "CG2144 04-17 LIMITATION OF COVERAGE TO DESIGNATED PREMISES OR PROJECT",
+          "CG2147 12-07 EMPLOYMENT RELATED PRACTICES EXCL",
+          "CG2155 09-99 TOTAL POLLUTION EXCLUSION WITH A HOSTILE FIRE EXCEPTION",
+          "CG2132 05-09 COMMUNICABLE DISEASE EXCLUSION",
+          "CG2167 12-04 FUNGI OR BACTERIA EXCLUSION",
+          "CG2196 03-05 SILICA OR SILICA-RELATED DUST EXCLUSION",
+          "CG2426 04-13 AMENDMENT OF INSURED CONTRACT DEFINITION",
+          "GCG2023 04-23 EXCLUSION - ASBESTOS",
+          "CG4032 05-23 EXCLUSION —- PERFLUOROALKYL AND POLYFLUOROALKYL SUBSTANCES (PFAS)",
+          "GCG2008 04-23 EXCLUSION - CYBER AND DATA LIABILITY",
+          "GCG7504 04-23 ANTI-STACKING ENDORSEMENT",
+          "CG4004 12-19 EXCLUSION - EARTH MOVEMENT",
+          "$1007 (12-2000) Page 1 of"
+        ],
+        "deductibles": {
+          "Windstorm or Hail": "$3034 (01-16)"
+        }
+      },
+      "EPLI": {
+        "policy_number": "PAV0587972",
+        "named_insured": "7839 Rising Sun LLC DBA Road Trip",
+        "dba": "Road Trip"
+      },
+      "LIQUOR": {
+        "policy_number": "PAV0587972",
+        "named_insured": "7839 RISING SUN LLC",
+        "dba": "Road Trip",
+        "mailing_address": "7839 Rankin RD, Humble, TX 77396",
+        "effective_date": "09/25/2025",
+        "expiration_date": "09/25/2026",
+        "description_of_operations": "LRO C-STORE",
+        "premiums": {
+          "total_premium_payable_at_inception": "$12,007.00",
+          "policy_fee": "$600.00",
+          "inspection_fee": "$175.00",
+          "surplus_lines_tax": "$619.93",
+          "stamping_fee": "$5.11",
+          "total": "$13,407.04"
+        },
+        "locations": [
+          "7839 Rankin RD Humble, TX 77396"
+        ]
+      }
+    }
+  }
+}
