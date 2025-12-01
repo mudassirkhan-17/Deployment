@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Mckinney and Co",
-  description: "Insurance PDF Analysis API",
+  description: "Insurance PDF Analysis API with QC System",
 };
 
 export default function RootLayout({

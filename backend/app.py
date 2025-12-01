@@ -354,8 +354,8 @@ def finalize_upload(uploadId: str, sheetName: str = "Insurance Fields Data"):
 async def upload_qc(
     request: Request,
     policy_pdf: UploadFile = File(...),
-    property_cert_pdf: UploadFile = File(...),
-    gl_cert_pdf: UploadFile = File(...),
+    property_cert_pdf: UploadFile = File(None),
+    gl_cert_pdf: UploadFile = File(None),
     username: str = Form(...)
 ):
     """
@@ -383,12 +383,7 @@ async def upload_qc(
         
         # Read file contents
         policy_content = await policy_pdf.read()
-        property_cert_content = await property_cert_pdf.read()
-        gl_cert_content = await gl_cert_pdf.read()
-        
         print(f"   Policy PDF size: {len(policy_content)} bytes")
-        print(f"   Property Certificate size: {len(property_cert_content)} bytes")
-        print(f"   GL Certificate size: {len(gl_cert_content)} bytes")
         
         # Upload policy PDF to GCS
         policy_blob_path = f"qc/uploads/{upload_id}/policy.pdf"
@@ -397,17 +392,27 @@ async def upload_qc(
         policy_gcs_path = f"gs://{bucket_name}/{policy_blob_path}"
         print(f"   ✓ Uploaded policy PDF: {policy_blob_path}")
         
-        # Upload property certificate to GCS
-        property_cert_blob_path = f"qc/uploads/{upload_id}/property_cert.pdf"
-        blob = bucket.blob(property_cert_blob_path)
-        blob.upload_from_string(property_cert_content, content_type='application/pdf')
-        print(f"   ✓ Uploaded property certificate: {property_cert_blob_path}")
+        # Upload property certificate if provided
+        if property_cert_pdf:
+            property_cert_content = await property_cert_pdf.read()
+            print(f"   Property Certificate size: {len(property_cert_content)} bytes")
+            property_cert_blob_path = f"qc/uploads/{upload_id}/property_cert.pdf"
+            blob = bucket.blob(property_cert_blob_path)
+            blob.upload_from_string(property_cert_content, content_type='application/pdf')
+            print(f"   ✓ Uploaded property certificate: {property_cert_blob_path}")
+        else:
+            print(f"   ⊘ Property certificate not provided")
         
-        # Upload GL certificate to GCS
-        gl_cert_blob_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
-        blob = bucket.blob(gl_cert_blob_path)
-        blob.upload_from_string(gl_cert_content, content_type='application/pdf')
-        print(f"   ✓ Uploaded GL certificate: {gl_cert_blob_path}")
+        # Upload GL certificate if provided
+        if gl_cert_pdf:
+            gl_cert_content = await gl_cert_pdf.read()
+            print(f"   GL Certificate size: {len(gl_cert_content)} bytes")
+            gl_cert_blob_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
+            blob = bucket.blob(gl_cert_blob_path)
+            blob.upload_from_string(gl_cert_content, content_type='application/pdf')
+            print(f"   ✓ Uploaded GL certificate: {gl_cert_blob_path}")
+        else:
+            print(f"   ⊘ GL certificate not provided")
         
         # Queue QC processing task
         from tasks import process_qc_task
@@ -436,10 +441,10 @@ def get_qc_results(upload_id: str):
     
     Returns:
         - llm_results: Extracted policy fields for Property and GL
-        - certificates: Signed URLs for property and GL certificate PDFs
+        - certificates: Proxy URLs for property and GL certificate PDFs
     """
     try:
-        from qc_integration import get_qc_results, generate_signed_urls
+        from qc_integration import get_qc_results
         
         print(f"📥 Retrieving QC results for: {upload_id}")
         
@@ -448,9 +453,32 @@ def get_qc_results(upload_id: str):
         if "error" in results:
             raise HTTPException(status_code=404, detail=results["error"])
         
-        # Generate signed URLs for certificates
-        signed_urls = generate_signed_urls(upload_id)
-        results["certificates"] = signed_urls
+        # Generate proxy URLs instead of signed URLs to avoid CORS
+        certificates = {
+            "property": None,
+            "gl": None
+        }
+        
+        # Check if certificates exist and generate proxy URLs
+        try:
+            property_cert_path = f"qc/uploads/{upload_id}/property_cert.pdf"
+            blob = bucket.blob(property_cert_path)
+            if blob.exists():
+                certificates["property"] = f"/qc-cert/{upload_id}/property"
+                print(f"✓ Property certificate available")
+        except Exception as e:
+            print(f"⚠️  Property cert check failed: {e}")
+        
+        try:
+            gl_cert_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
+            blob = bucket.blob(gl_cert_path)
+            if blob.exists():
+                certificates["gl"] = f"/qc-cert/{upload_id}/gl"
+                print(f"✓ GL certificate available")
+        except Exception as e:
+            print(f"⚠️  GL cert check failed: {e}")
+        
+        results["certificates"] = certificates
         
         return {
             "success": True,
@@ -464,4 +492,38 @@ def get_qc_results(upload_id: str):
         print(f"❌ Failed to get QC results: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/qc-cert/{upload_id}/{cert_type}")
+def get_qc_certificate(upload_id: str, cert_type: str):
+    """
+    Proxy endpoint to serve certificate PDFs (avoids CORS issues)
+    """
+    try:
+        if cert_type not in ["property", "gl"]:
+            raise HTTPException(status_code=400, detail="Invalid certificate type")
+        
+        cert_path = f"qc/uploads/{upload_id}/{cert_type}_cert.pdf"
+        blob = bucket.blob(cert_path)
+        
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Certificate not found")
+        
+        # Download and return the PDF
+        pdf_content = blob.download_as_bytes()
+        
+        from fastapi.responses import Response
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={cert_type}_cert.pdf"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to serve certificate: {e}")
         raise HTTPException(status_code=500, detail=str(e))

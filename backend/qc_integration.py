@@ -332,6 +332,7 @@ def generate_signed_urls(upload_id: str) -> dict:
         try:
             property_cert_path = f"qc/uploads/{upload_id}/property_cert.pdf"
             blob = bucket.blob(property_cert_path)
+            # Reload blob metadata to check existence
             if blob.exists():
                 url = blob.generate_signed_url(
                     version="v4",
@@ -340,6 +341,8 @@ def generate_signed_urls(upload_id: str) -> dict:
                 )
                 signed_urls["property"] = url
                 print(f"✓ Generated signed URL for property certificate")
+            else:
+                print(f"⊘ Property certificate not found: {property_cert_path}")
         except Exception as e:
             print(f"⚠️  Failed to generate property cert URL: {e}")
         
@@ -347,6 +350,7 @@ def generate_signed_urls(upload_id: str) -> dict:
         try:
             gl_cert_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
             blob = bucket.blob(gl_cert_path)
+            # Reload blob metadata to check existence
             if blob.exists():
                 url = blob.generate_signed_url(
                     version="v4",
@@ -355,6 +359,8 @@ def generate_signed_urls(upload_id: str) -> dict:
                 )
                 signed_urls["gl"] = url
                 print(f"✓ Generated signed URL for GL certificate")
+            else:
+                print(f"⊘ GL certificate not found: {gl_cert_path}")
         except Exception as e:
             print(f"⚠️  Failed to generate GL cert URL: {e}")
         

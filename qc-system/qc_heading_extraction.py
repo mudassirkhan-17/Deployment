@@ -248,9 +248,9 @@ class PolicyPageExtractor:
             
             if not is_duplicate:
                 # Get page number
-                    page_num = self.get_page_from_char_position(char_pos)
-                    line_num = self.get_line_number(char_pos)
-                    
+                page_num = self.get_page_from_char_position(char_pos)
+                line_num = self.get_line_number(char_pos)
+                
                 # Check if this page has actual policy data (not examples)
                 page_start, page_end = self.page_boundaries.get(page_num, (0, 0))
                 page_text = self.policy_text[page_start:min(page_end, page_start + 3000)]
@@ -359,8 +359,8 @@ class PolicyPageExtractor:
                 print(f"Page {match.page_number}", end=" ")
                 
                 # Extract 5 pages around each match
-            extracted_text, validation = self.extract_pages_after_heading(
-                match.char_position, 
+                extracted_text, validation = self.extract_pages_after_heading(
+                    match.char_position, 
                     num_pages=5
                 )
                 
