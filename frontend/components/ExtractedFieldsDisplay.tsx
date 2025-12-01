@@ -35,7 +35,27 @@ export default function ExtractedFieldsDisplay({
     return String(value);
   };
 
-  const entries = Object.entries(data).filter(([, value]) => value !== null && value !== undefined);
+  // Flatten nested objects into separate fields
+  const flattenData = (obj: Record<string, any>, prefix = ''): Array<[string, any]> => {
+    const result: Array<[string, any]> = [];
+    
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === null || value === undefined) continue;
+      
+      const newKey = prefix ? `${prefix} > ${key}` : key;
+      
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        // Recursively flatten nested objects
+        result.push(...flattenData(value, newKey));
+      } else {
+        result.push([newKey, value]);
+      }
+    }
+    
+    return result;
+  };
+
+  const entries = flattenData(data);
 
   return (
     <div className={`border border-gray-200 rounded-lg overflow-hidden ${bgColor}`}>

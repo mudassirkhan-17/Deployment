@@ -47,6 +47,9 @@ export default function QCReviewPage() {
         }
 
         const data = await response.json();
+        console.log('API Response:', data);
+        console.log('LLM Results:', data.data?.llm_results);
+        
         if (data.success && data.data.llm_results) {
           setResults(data);
           setLoading(false);
@@ -122,8 +125,11 @@ export default function QCReviewPage() {
     ? (certificates.property ? `${apiUrl}${certificates.property}` : null)
     : (certificates.gl ? `${apiUrl}${certificates.gl}` : null);
 
-  const propertyData = results.data.llm_results?.PROPERTY || null;
-  const glData = results.data.llm_results?.GL || null;
+  // LLM results are nested under coverage_types
+  const llmData: any = results.data.llm_results || {};
+  const llmResults = llmData.coverage_types || llmData;
+  const propertyData = llmResults.PROPERTY || null;
+  const glData = llmResults.GL || null;
   
   // Check if certificates exist and are not null/empty
   const hasCertificates = Boolean(
@@ -135,7 +141,11 @@ export default function QCReviewPage() {
     certificates,
     hasCertificates,
     pdfUrl,
-    selectedCert
+    selectedCert,
+    llmResults,
+    propertyData,
+    glData,
+    rawData: results.data
   });
 
   return (
