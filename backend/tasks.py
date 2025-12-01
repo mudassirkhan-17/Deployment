@@ -80,3 +80,37 @@ def process_ocr_task(upload_id: str):
             'error': str(e)
         }
 
+@celery_app.task
+def process_qc_task(upload_id: str, policy_pdf_path: str, username: str):
+    """
+    Background task to process QC pipeline: OCR → Regex Extraction → LLM Field Extraction
+    
+    Args:
+        upload_id: Unique ID for this QC upload
+        policy_pdf_path: GCS path to policy PDF
+        username: Username for tracking
+    
+    Returns:
+        Result dict with success status and GCS paths to results
+    """
+    try:
+        from qc_integration import process_qc_extraction
+        print(f"📦 Starting QC task for upload: {upload_id}")
+        result = process_qc_extraction(upload_id, policy_pdf_path, username)
+        
+        if result.get('success'):
+            print(f"✅ QC task completed for upload: {upload_id}")
+        else:
+            print(f"❌ QC task failed for upload: {upload_id}: {result.get('error')}")
+        
+        return result
+    except Exception as e:
+        print(f"❌ QC task error for upload: {upload_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'upload_id': upload_id,
+            'error': str(e)
+        }
+

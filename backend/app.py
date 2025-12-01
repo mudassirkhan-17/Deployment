@@ -344,3 +344,124 @@ def finalize_upload(uploadId: str, sheetName: str = "Insurance Fields Data"):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+# ============================================================
+# QC System Endpoints
+# ============================================================
+
+@app.post("/upload-qc/")
+async def upload_qc(
+    request: Request,
+    policy_pdf: UploadFile = File(...),
+    property_cert_pdf: UploadFile = File(...),
+    gl_cert_pdf: UploadFile = File(...),
+    username: str = Form(...)
+):
+    """
+    Upload policy PDF and certificate PDFs for QC processing
+    
+    Form data:
+    - policy_pdf: Policy PDF file
+    - property_cert_pdf: Property certificate PDF
+    - gl_cert_pdf: GL certificate PDF
+    - username: Username for tracking
+    
+    Returns:
+        upload_id and task_id for tracking
+    """
+    try:
+        import json
+        import uuid
+        from datetime import datetime
+        
+        print(f"📝 QC upload received from user: {username}")
+        
+        # Generate unique upload ID
+        upload_id = f"qc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+        print(f"   Upload ID: {upload_id}")
+        
+        # Read file contents
+        policy_content = await policy_pdf.read()
+        property_cert_content = await property_cert_pdf.read()
+        gl_cert_content = await gl_cert_pdf.read()
+        
+        print(f"   Policy PDF size: {len(policy_content)} bytes")
+        print(f"   Property Certificate size: {len(property_cert_content)} bytes")
+        print(f"   GL Certificate size: {len(gl_cert_content)} bytes")
+        
+        # Upload policy PDF to GCS
+        policy_blob_path = f"qc/uploads/{upload_id}/policy.pdf"
+        blob = bucket.blob(policy_blob_path)
+        blob.upload_from_string(policy_content, content_type='application/pdf')
+        policy_gcs_path = f"gs://{bucket_name}/{policy_blob_path}"
+        print(f"   ✓ Uploaded policy PDF: {policy_blob_path}")
+        
+        # Upload property certificate to GCS
+        property_cert_blob_path = f"qc/uploads/{upload_id}/property_cert.pdf"
+        blob = bucket.blob(property_cert_blob_path)
+        blob.upload_from_string(property_cert_content, content_type='application/pdf')
+        print(f"   ✓ Uploaded property certificate: {property_cert_blob_path}")
+        
+        # Upload GL certificate to GCS
+        gl_cert_blob_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
+        blob = bucket.blob(gl_cert_blob_path)
+        blob.upload_from_string(gl_cert_content, content_type='application/pdf')
+        print(f"   ✓ Uploaded GL certificate: {gl_cert_blob_path}")
+        
+        # Queue QC processing task
+        from tasks import process_qc_task
+        task = process_qc_task.delay(upload_id, policy_gcs_path, username)
+        print(f"   ✓ Queued QC task: {task.id}")
+        
+        return {
+            "success": True,
+            "upload_id": upload_id,
+            "task_id": task.id,
+            "status": "queued",
+            "message": "QC processing started"
+        }
+    
+    except Exception as e:
+        print(f"❌ QC upload failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/qc-results/{upload_id}")
+def get_qc_results(upload_id: str):
+    """
+    Retrieve QC results for a given upload_id
+    
+    Returns:
+        - llm_results: Extracted policy fields for Property and GL
+        - certificates: Signed URLs for property and GL certificate PDFs
+    """
+    try:
+        from qc_integration import get_qc_results, generate_signed_urls
+        
+        print(f"📥 Retrieving QC results for: {upload_id}")
+        
+        results = get_qc_results(upload_id)
+        
+        if "error" in results:
+            raise HTTPException(status_code=404, detail=results["error"])
+        
+        # Generate signed URLs for certificates
+        signed_urls = generate_signed_urls(upload_id)
+        results["certificates"] = signed_urls
+        
+        return {
+            "success": True,
+            "upload_id": upload_id,
+            "data": results
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to get QC results: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
