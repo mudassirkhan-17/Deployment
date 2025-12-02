@@ -118,7 +118,7 @@ export default function DashboardPage() {
               <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/30 rounded-lg p-6 hover:from-white/15 hover:to-white/10 transition cursor-pointer h-full">
                 <h3 className="text-xl font-semibold text-white mb-3">✅ Quality Control / Comparison sheet</h3>
                 <p className="text-white/70">
-                  Manage your account settings and preferences.
+                  Upload policy and certificate PDFs for side-by-side comparison and quality control review.
                 </p>
                 <div className="mt-4 text-white/60 text-sm flex items-center gap-2">
                   <span>Click to start →</span>

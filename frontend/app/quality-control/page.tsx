@@ -75,7 +75,7 @@ export default function QCUploadPage() {
       console.log('✅ Upload successful:', data);
 
       // Redirect to review page with polling for results
-      router.push(`/qc/review/${data.upload_id}`);
+      router.push(`/quality-control/review/${data.upload_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       console.error('Upload error:', err);
@@ -122,6 +122,17 @@ export default function QCUploadPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-2xl mx-auto">
+        {/* Back to Dashboard Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
+          >
+            <span>←</span>
+            <span>Back to Dashboard</span>
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">

@@ -441,6 +441,7 @@ def get_qc_results(upload_id: str):
     
     Returns:
         - llm_results: Extracted policy fields for Property and GL
+        - flagged_results: Color-coded comparison results
         - certificates: Proxy URLs for property and GL certificate PDFs
     """
     try:
@@ -452,6 +453,11 @@ def get_qc_results(upload_id: str):
         
         if "error" in results:
             raise HTTPException(status_code=404, detail=results["error"])
+        
+        # Debug: Print what we got
+        print(f"📊 Results keys: {list(results.keys())}")
+        print(f"   - flagged_results: {results.get('flagged_results') is not None}")
+        print(f"   - llm_results: {results.get('llm_results') is not None}")
         
         # Generate proxy URLs instead of signed URLs to avoid CORS
         certificates = {
@@ -479,6 +485,8 @@ def get_qc_results(upload_id: str):
             print(f"⚠️  GL cert check failed: {e}")
         
         results["certificates"] = certificates
+        
+        print(f"✅ Returning results with flagged_results: {results.get('flagged_results') is not None}")
         
         return {
             "success": True,

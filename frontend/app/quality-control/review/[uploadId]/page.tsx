@@ -8,9 +8,15 @@ import ExtractedFieldsDisplay from '@/components/ExtractedFieldsDisplay';
 interface QCResult {
   upload_id: string;
   data: {
-    llm_results: {
-      GL?: Record<string, any>;
-      PROPERTY?: Record<string, any>;
+    llm_results?: {
+      coverage_types?: {
+        GL?: Record<string, any>;
+        PROPERTY?: Record<string, any>;
+      };
+    };
+    flagged_results?: {
+      property?: Record<string, any>;
+      gl?: Record<string, any>;
     };
     certificates: {
       property: string | null;
@@ -49,13 +55,33 @@ export default function QCReviewPage() {
         const data = await response.json();
         console.log('API Response:', data);
         console.log('LLM Results:', data.data?.llm_results);
+        console.log('Flagged Results:', data.data?.flagged_results);
         
         if (data.success && data.data.llm_results) {
-          setResults(data);
-          setLoading(false);
-        } else if (pollCount < 60) {
-          // Keep polling if results aren't ready
+          // Wait for BOTH llm_results AND flagged_results before displaying
+          // flagged_results takes longer because it needs certificate extraction + comparison
+          if (data.data.flagged_results && Object.keys(data.data.flagged_results).length > 0) {
+            console.log('✅ Both LLM and flagged results ready!');
+            setResults(data);
+            setLoading(false);
+          } else if (pollCount < 120) {
+            // Keep polling up to 4 minutes for flagged results (certificate extraction is slow)
+            console.log(`⏳ Waiting for flagged results... (poll ${pollCount + 1}/120)`);
+            setTimeout(() => setPollCount((p) => p + 1), 2000);
+          } else {
+            // Timeout - show LLM results without comparison
+            console.log('⚠️  Timeout waiting for flagged results, using LLM data');
+            setResults(data);
+            setLoading(false);
+          }
+        } else if (pollCount < 120) {
+          // Still waiting for initial results
+          console.log(`⏳ Waiting for initial results... (poll ${pollCount + 1}/120)`);
           setTimeout(() => setPollCount((p) => p + 1), 2000);
+        } else {
+          // Complete timeout
+          setError('Processing timeout - no results available');
+          setLoading(false);
         }
       } catch (err) {
         if (pollCount < 60) {
@@ -125,11 +151,32 @@ export default function QCReviewPage() {
     ? (certificates.property ? `${apiUrl}${certificates.property}` : null)
     : (certificates.gl ? `${apiUrl}${certificates.gl}` : null);
 
-  // LLM results are nested under coverage_types
-  const llmData: any = results.data.llm_results || {};
-  const llmResults = llmData.coverage_types || llmData;
-  const propertyData = llmResults.PROPERTY || null;
-  const glData = llmResults.GL || null;
+  // Use flagged results if available (color-coded), otherwise fall back to raw LLM results
+  let propertyData = null;
+  let glData = null;
+  let isFlagged = false;
+
+  console.log('🔍 Data check:', {
+    hasFlaggedResults: !!results.data.flagged_results,
+    flaggedResults: results.data.flagged_results,
+    llmResults: results.data.llm_results
+  });
+
+  if (results.data.flagged_results && Object.keys(results.data.flagged_results).length > 0) {
+    // Use flagged results (with color codes)
+    console.log('✅ Using flagged results (color-coded)');
+    propertyData = results.data.flagged_results.property || null;
+    glData = results.data.flagged_results.gl || null;
+    isFlagged = true;
+  } else {
+    // Fall back to raw LLM results if flagged not available yet
+    console.log('⚠️  Flagged results not available, falling back to raw LLM');
+    const llmData: any = results.data.llm_results || {};
+    const llmResults = llmData.coverage_types || llmData;
+    propertyData = llmResults.PROPERTY || null;
+    glData = llmResults.GL || null;
+    isFlagged = false;
+  }
   
   // Check if certificates exist and are not null/empty
   const hasCertificates = Boolean(
@@ -142,7 +189,7 @@ export default function QCReviewPage() {
     hasCertificates,
     pdfUrl,
     selectedCert,
-    llmResults,
+    isFlagged,
     propertyData,
     glData,
     rawData: results.data
@@ -150,23 +197,31 @@ export default function QCReviewPage() {
 
   return (
     <div className="h-screen bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">📋 QC Review</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Upload ID: <code className="bg-gray-100 px-2 py-1 rounded">{uploadId}</code>
-            </p>
-          </div>
-          <button
-            onClick={() => window.location.href = '/qc'}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-          >
-            ← Back
-          </button>
-        </div>
-      </div>
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 shadow-sm p-4">
+              <div className="max-w-7xl mx-auto flex justify-between items-center">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">📋 QC Review</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Upload ID: <code className="bg-gray-100 px-2 py-1 rounded">{uploadId}</code>
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => window.location.href = '/dashboard'}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+                  >
+                    🏠 Dashboard
+                  </button>
+                  <button
+                    onClick={() => window.location.href = '/quality-control'}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                  >
+                    ← New Upload
+                  </button>
+                </div>
+              </div>
+            </div>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -220,11 +275,24 @@ export default function QCReviewPage() {
         {/* RIGHT PANEL: Extracted Data */}
         <div className={`${hasCertificates ? 'w-1/2' : 'w-full'} overflow-y-auto bg-white p-6`}>
           <div className="max-w-2xl space-y-6">
+            {/* Color Legend (if flagged) */}
+            {isFlagged && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <p className="font-semibold text-blue-900 mb-2">🎨 Color Legend:</p>
+                <div className="space-y-1 text-blue-800">
+                  <p><span className="text-green-700 font-bold">🟢 Green</span> = Matches Certificate</p>
+                  <p><span className="text-red-700 font-bold">🔴 Red</span> = Mismatch with Certificate</p>
+                  <p><span className="text-gray-700 font-bold">⚫ Black</span> = Not in Certificate</p>
+                </div>
+              </div>
+            )}
+
             {/* Property Data */}
             <ExtractedFieldsDisplay
               data={propertyData}
               title="📊 PROPERTY COVERAGE DATA"
               color="blue"
+              isFlagged={isFlagged}
             />
 
             {/* GL Data */}
@@ -232,6 +300,7 @@ export default function QCReviewPage() {
               data={glData}
               title="📊 GL COVERAGE DATA"
               color="green"
+              isFlagged={isFlagged}
             />
           </div>
         </div>

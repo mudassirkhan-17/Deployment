@@ -219,6 +219,79 @@ def process_qc_extraction(upload_id: str, policy_pdf_path: str, username: str) -
             traceback.print_exc()
             raise Exception(f"LLM extraction failed: {e}")
         
+        # ====== STEP 5: Extract Certificate Fields ======
+        print(f"\n📜 Step 5: Extracting certificate fields...")
+        try:
+            certificate_fields = {
+                "property": {},
+                "gl": {}
+            }
+            
+            # Extract Property Certificate if exists
+            property_cert_path = f"qc/uploads/{upload_id}/property_cert.pdf"
+            if bucket.blob(property_cert_path).exists():
+                local_prop_cert = os.path.join(temp_dir, "property_cert.pdf")
+                if download_pdf_from_gcs(property_cert_path, local_prop_cert):
+                    print(f"  → Extracting Property Certificate...")
+                    certificate_fields["property"] = extract_certificate_fields(
+                        local_prop_cert,
+                        "PROPERTY"
+                    )
+            
+            # Extract GL Certificate if exists
+            gl_cert_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
+            if bucket.blob(gl_cert_path).exists():
+                local_gl_cert = os.path.join(temp_dir, "gl_cert.pdf")
+                if download_pdf_from_gcs(gl_cert_path, local_gl_cert):
+                    print(f"  → Extracting GL Certificate...")
+                    certificate_fields["gl"] = extract_certificate_fields(
+                        local_gl_cert,
+                        "GL"
+                    )
+            
+            # Upload certificate extraction results
+            cert_extraction_gcs_path = f"qc/uploads/{upload_id}/certificate_extraction.json"
+            upload_json_to_gcs(certificate_fields, cert_extraction_gcs_path)
+            
+        except Exception as e:
+            print(f"  ⚠️  Certificate extraction warning (non-critical): {e}")
+            certificate_fields = {"property": {}, "gl": {}}
+        
+        # ====== STEP 6: Compare Policy vs Certificate and Flag ======
+        print(f"\n🔴 Step 6: Comparing and flagging fields...")
+        try:
+            flagged_results = {}
+            
+            # Compare each coverage type
+            for coverage_type in ["PROPERTY", "GL"]:
+                coverage_key = coverage_type.lower()
+                
+                policy_data = llm_results["coverage_types"].get(coverage_type, {})
+                cert_data = certificate_fields.get(coverage_key, {})
+                
+                if policy_data:
+                    flagged_results[coverage_key] = compare_and_flag_fields(
+                        policy_data,
+                        cert_data
+                    )
+                    
+                    # Count matches/mismatches
+                    matches = sum(1 for f in flagged_results[coverage_key].values() if f.get("color") == "green")
+                    mismatches = sum(1 for f in flagged_results[coverage_key].values() if f.get("color") == "red")
+                    not_in_cert = sum(1 for f in flagged_results[coverage_key].values() if f.get("color") == "black")
+                    
+                    print(f"  {coverage_type}: {matches}✅ {mismatches}❌ {not_in_cert}⚫")
+            
+            # Upload flagged results to GCS
+            flagged_gcs_path = f"qc/uploads/{upload_id}/flagged_results.json"
+            upload_json_to_gcs(flagged_results, flagged_gcs_path)
+            
+        except Exception as e:
+            print(f"  ❌ Comparison failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise Exception(f"Comparison failed: {e}")
+        
         # ====== Success ======
         print(f"\n✅ QC pipeline completed successfully")
         
@@ -229,6 +302,7 @@ def process_qc_extraction(upload_id: str, policy_pdf_path: str, username: str) -
             "ocr_output_path": ocr_gcs_path,
             "extraction_results_path": extraction_gcs_path,
             "llm_results_path": llm_gcs_path,
+            "flagged_results_path": flagged_gcs_path,
             "processed_at": datetime.now().isoformat(),
             "coverage_types": list(llm_results.get('coverage_types', {}).keys())
         }
@@ -255,6 +329,132 @@ def process_qc_extraction(upload_id: str, policy_pdf_path: str, username: str) -
                 print(f"\n⚠️  Failed to clean temp directory: {e}")
 
 
+def extract_certificate_fields(cert_pdf_path: str, cert_type: str):
+    """
+    Extract fields from certificate PDF using OCR + LLM
+    
+    Args:
+        cert_pdf_path: Local path to certificate PDF
+        cert_type: "PROPERTY" or "GL"
+    
+    Returns:
+        Dict with extracted certificate fields
+    """
+    try:
+        from extract_policy_ocr import extract_pdf_text
+        from llm_field_extraction import extract_fields_with_llm, get_llm_client
+        
+        # 1. OCR the certificate
+        cert_ocr_path = cert_pdf_path.replace('.pdf', '_ocr.txt')
+        extract_pdf_text(cert_pdf_path, cert_ocr_path)
+        
+        with open(cert_ocr_path, 'r', encoding='utf-8') as f:
+            cert_ocr = f.read()
+        
+        print(f"  ✓ OCR complete for {cert_type} certificate ({len(cert_ocr)} chars)")
+        
+        # 2. Extract fields using LLM
+        client = get_llm_client()
+        cert_fields = extract_fields_with_llm(client, cert_type, cert_ocr)
+        
+        print(f"  ✓ LLM extraction complete for {cert_type} ({len(cert_fields)} fields)")
+        
+        # Clean up temp OCR file
+        if os.path.exists(cert_ocr_path):
+            os.remove(cert_ocr_path)
+        
+        return cert_fields
+    
+    except Exception as e:
+        print(f"  ❌ Error extracting {cert_type} certificate: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
+
+
+def compare_and_flag_fields(policy_fields: dict, cert_fields: dict) -> dict:
+    """
+    Compare policy fields vs certificate fields and assign color flags
+    Recursively handles nested objects (dicts)
+    
+    Args:
+        policy_fields: Extracted fields from policy
+        cert_fields: Extracted fields from certificate
+    
+    Returns:
+        Dict with policy fields + color flags (flattened with nested keys)
+    """
+    from difflib import SequenceMatcher
+    
+    def compare_values(policy_val, cert_val):
+        """Helper to compare two values and return color"""
+        if policy_val is None or policy_val == "":
+            return "black"
+        
+        if cert_val is None:
+            return "black"
+        
+        if cert_val == "" and policy_val != "":
+            return "black"
+        
+        # Normalize strings
+        if isinstance(policy_val, str) and isinstance(cert_val, str):
+            policy_str = policy_val.strip().upper()
+            cert_str = cert_val.strip().upper()
+            
+            if policy_str == cert_str:
+                return "green"
+            
+            # Fuzzy match for typos
+            ratio = SequenceMatcher(None, policy_str, cert_str).ratio()
+            return "green" if ratio > 0.95 else "red"
+        
+        elif isinstance(policy_val, (int, float)) and isinstance(cert_val, (int, float)):
+            return "green" if policy_val == cert_val else "red"
+        
+        elif isinstance(policy_val, str) or isinstance(cert_val, str):
+            # Mixed types, compare as strings
+            return "green" if str(policy_val).strip().upper() == str(cert_val).strip().upper() else "red"
+        
+        else:
+            return "red"
+    
+    def flatten_and_flag(obj, prefix="", cert_obj=None):
+        """Recursively flatten objects and assign colors"""
+        result = {}
+        
+        if cert_obj is None:
+            cert_obj = {}
+        
+        for key, policy_value in obj.items():
+            if policy_value is None or policy_value == "":
+                continue
+            
+            new_key = f"{prefix} > {key}" if prefix else key
+            cert_value = cert_obj.get(key) if isinstance(cert_obj, dict) else None
+            
+            # Only recurse if value is a dict AND not empty
+            if isinstance(policy_value, dict) and len(policy_value) > 0:
+                nested_result = flatten_and_flag(
+                    policy_value,
+                    new_key,
+                    cert_value if isinstance(cert_value, dict) else {}
+                )
+                result.update(nested_result)
+            else:
+                # Leaf value (string, number, list, or empty dict) - compare and flag
+                color = compare_values(policy_value, cert_value)
+                result[new_key] = {
+                    "value": policy_value,
+                    "color": color
+                }
+        
+        return result
+    
+    flagged = flatten_and_flag(policy_fields, "", cert_fields)
+    return flagged
+
+
 def get_qc_results(upload_id: str) -> dict:
     """
     Retrieve QC results from GCS for a given upload_id
@@ -263,15 +463,22 @@ def get_qc_results(upload_id: str) -> dict:
         upload_id: Unique QC upload ID
     
     Returns:
-        Dict with paths to OCR, extraction, and LLM results
+        Dict with OCR, extraction, LLM, flagged results, and certificate URLs
     """
     try:
         results = {
             "upload_id": upload_id,
             "ocr_output": None,
             "extraction_results": None,
-            "llm_results": None
+            "llm_results": None,
+            "flagged_results": None,
+            "certificates": {
+                "property": None,
+                "gl": None
+            }
         }
+        
+        print(f"📥 Retrieving QC results for upload: {upload_id}")
         
         # Try to download OCR output
         try:
@@ -302,6 +509,31 @@ def get_qc_results(upload_id: str) -> dict:
                 print(f"✓ LLM results retrieved: {llm_path}")
         except Exception as e:
             print(f"⚠️  LLM results not found: {e}")
+        
+        # Try to download flagged results (color-coded for UI) - PRIORITY
+        try:
+            flagged_path = f"qc/uploads/{upload_id}/flagged_results.json"
+            blob = bucket.blob(flagged_path)
+            if blob.exists():
+                flagged_data = json.loads(blob.download_as_string().decode('utf-8'))
+                results["flagged_results"] = flagged_data
+                num_fields = sum(len(v) for v in flagged_data.values() if isinstance(v, dict))
+                print(f"✓ Flagged results retrieved: {flagged_path} ({num_fields} fields)")
+            else:
+                print(f"⚠️  Flagged results not found at: {flagged_path} (still processing?)")
+        except Exception as e:
+            print(f"❌ Error retrieving flagged results: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Check for certificate PDFs
+        property_cert_path = f"qc/uploads/{upload_id}/property_cert.pdf"
+        if bucket.blob(property_cert_path).exists():
+            results["certificates"]["property"] = f"/qc-cert/{upload_id}/property"
+        
+        gl_cert_path = f"qc/uploads/{upload_id}/gl_cert.pdf"
+        if bucket.blob(gl_cert_path).exists():
+            results["certificates"]["gl"] = f"/qc-cert/{upload_id}/gl"
         
         return results
     
